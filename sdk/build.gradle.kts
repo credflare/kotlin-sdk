@@ -9,6 +9,7 @@ android {
 }
 dependencies {
     implementation("androidx.core:core:1.18.0")
+    implementation("com.google.mlkit:face-detection:16.1.7")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20250517")
 }

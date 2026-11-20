@@ -2,6 +2,9 @@ package net.credflare.kotlindemo
 
 import android.app.Activity
 import android.app.Instrumentation
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.os.Bundle
 import net.credflare.sdk.*
 import org.json.JSONObject
@@ -10,9 +13,11 @@ import java.util.UUID
 
 class ContractInstrumentation: Instrumentation() {
     private var base = "http://127.0.0.1:3108/api/v1"
-    override fun onCreate(arguments: Bundle?) { super.onCreate(arguments); base=arguments?.getString("contract_base") ?: base; start() }
+    override fun onCreate(arguments: Bundle?) { super.onCreate(arguments); base=arguments?.getString("contract_base") ?: base; probe=arguments?.getString("face_probe"); start() }
+    private var probe: String? = null
     override fun onStart() {
         val output=Bundle()
+        probe?.let { path -> output.putString(REPORT_KEY_STREAMRESULT,faceProbe(path)); finish(Activity.RESULT_OK,output); return }
         try {
             val fixture=JSONObject(context.assets.open("capture-snapshot-or-upload.json").bufferedReader().use { it.readText() }).getJSONObject("data")
             fun descriptor(token: String = "test-session-token") = SessionDescriptor(UUID.fromString(fixture.getString("session_id")),token,base,fixture.getString("expires_at"))
@@ -90,6 +95,19 @@ class ContractInstrumentation: Instrumentation() {
         } catch(error: Throwable) {
             output.putString(REPORT_KEY_STREAMRESULT,"FAIL: ${error.javaClass.simpleName}: ${error.message}")
             finish(Activity.RESULT_CANCELED,output)
+        }
+    }
+    private fun faceProbe(path: String): String {
+        val original=BitmapFactory.decodeFile(path) ?: return "FAIL: cannot read $path"
+        fun transformed(block: Matrix.() -> Unit) = Bitmap.createBitmap(original,0,0,original.width,original.height,Matrix().apply(block),true)
+        val cases=listOf(
+            "upright" to (original to 0),
+            "mirrored" to (transformed { postScale(-1f,1f) } to 0),
+            "stored rotated 90 clockwise, rotation 270" to (transformed { postRotate(90f) } to 270),
+            "stored rotated 90 clockwise, rotation 90" to (transformed { postRotate(90f) } to 90),
+        )
+        return MlKitFaceSignalProvider().use { provider ->
+            cases.joinToString("\n") { (name,input) -> "$name: ${provider.detect(input.first,input.second)}" }
         }
     }
 }
