@@ -20,17 +20,17 @@ enum class CaptureSource(val value: String) { CAMERA("camera"), UPLOAD("upload")
 enum class DocumentSide(val value: String) { FRONT("front"), BACK("back") }
 data class CaptureStep(val side: DocumentSide, val input: String) { val id get() = "$input:${side.value}" }
 data class DocumentRequirement(val id: Int, val name: String, val policy: String, val sides: List<DocumentSide>, val groupKey: String?, val rule: String, val remainingRequired: Int) {
-    val supported get() = policy in listOf("upload", "either", "snapshot", "snapshot_and_upload")
-    val methodSummary get() = when(policy) { "upload" -> "Saved files"; "either" -> "Photo or file"; "snapshot" -> "Camera photos"; "snapshot_and_upload" -> "Photo and saved file"; else -> "Not available in this app" }
+    val supported get() = policy in listOf("upload", "snapshot_or_upload", "snapshot", "snapshot_and_upload")
+    val methodSummary get() = when(policy) { "upload" -> "Saved files"; "snapshot_or_upload" -> "Photo or file"; "snapshot" -> "Camera photos"; "snapshot_and_upload" -> "Photo and saved file"; else -> "Not available in this app" }
     fun captureSteps(): List<CaptureStep> {
         require(supported) { "This capture method is not available in this app." }
-        val sources = when(policy) { "snapshot_and_upload" -> listOf("camera", "upload"); "snapshot" -> listOf("camera"); "either" -> listOf("either"); else -> listOf("upload") }
+        val sources = when(policy) { "snapshot_and_upload" -> listOf("camera", "upload"); "snapshot" -> listOf("camera"); "snapshot_or_upload" -> listOf("camera_or_upload"); else -> listOf("upload") }
         return sources.flatMap { source -> sides.map { CaptureStep(it, source) } }
     }
     companion object {
         fun fromJson(value: JSONObject): DocumentRequirement {
             val type = value.getJSONObject("document_type")
-            val policy = value.optString("capture_method").ifEmpty { if(type.getString("capture_method") == "camera") "either" else "upload" }
+            val policy = value.optString("capture_method").ifEmpty { if(type.getString("capture_method") == "camera") "snapshot_or_upload" else "upload" }.let { if(it == "either") "snapshot_or_upload" else it }
             val sides = value.optJSONArray("requested_sides")?.let { array -> (0 until array.length()).map { DocumentSide.valueOf(array.getString(it).uppercase()) } } ?: if(type.getBoolean("two_sided")) listOf(DocumentSide.FRONT, DocumentSide.BACK) else listOf(DocumentSide.FRONT)
             return DocumentRequirement(type.getInt("id"), type.getString("name"), policy, sides, value.optString("group_key").takeIf { it.isNotEmpty() && it != "null" }, value.optString("rule", "all_of"), value.optInt("remaining_required", value.optInt("min_required", 1)))
         }

@@ -14,10 +14,10 @@ class ContractInstrumentation: Instrumentation() {
     override fun onStart() {
         val output=Bundle()
         try {
-            val fixture=JSONObject(context.assets.open("capture-either.json").bufferedReader().use { it.readText() }).getJSONObject("data")
+            val fixture=JSONObject(context.assets.open("capture-snapshot-or-upload.json").bufferedReader().use { it.readText() }).getJSONObject("data")
             fun descriptor(token: String = "test-session-token") = SessionDescriptor(UUID.fromString(fixture.getString("session_id")),token,base,fixture.getString("expires_at"))
             val info=VerificationSession(descriptor()).get()
-            check(info.documents[0].captureSteps().map { it.id } == listOf("either:front","either:back"))
+            check(info.documents[0].captureSteps().map { it.id } == listOf("camera_or_upload:front","camera_or_upload:back"))
             val combined=JSONObject(context.assets.open("capture-snapshot_and_upload.json").bufferedReader().use { it.readText() }).getJSONObject("data")
             check(SessionInfo.fromJson(combined).documents[0].captureSteps().map { it.id } == listOf("camera:front","camera:back","upload:front","upload:back"))
             fun expect(type: String, operation: () -> Unit) {
