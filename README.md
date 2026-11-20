@@ -1,6 +1,6 @@
 # Credflare Kotlin SDK
 
-Native Android document collection and a scoped applicant session client. Development SDK for Android 7.0 (API 24) and newer. The example targets API 36. Requires the scoped-session backend; no server client credentials belong in the app.
+Native Android document and selfie collection and a scoped applicant session client. Development SDK for Android 7.0 (API 24) and newer. The example targets API 36. Requires the scoped-session backend; no server client credentials belong in the app.
 
 ## Guided collection
 
@@ -19,7 +19,7 @@ The launcher returns false when a flow is already open. The provider runs on a w
 
 The flow supports camera photos, file selection, front/back steps, preview, replacement and explicit submission. Each document follows its backend capture rule: `upload`, `snapshot`, `either`, or `snapshot_and_upload`. Required document groups remain distinct from capture-source choices. Server file types and size limits are applied before upload and enforced again by the API.
 
-Camera source is client-reported. Trusted camera, liveness and deepfake checks are unavailable. The current flow does not collect forms, selfies or location checks. Unsent evidence survives activity recreation in process memory; after process termination, restart from the host app. Tokens and evidence are not saved in preferences or diagnostic logs.
+Camera source is client-reported. Trusted camera, liveness and deepfake checks are unavailable. The current flow does not collect forms or location checks. Unsent evidence survives activity recreation in process memory; after process termination, restart from the host app. Tokens and evidence are not saved in preferences or diagnostic logs.
 
 ## Session client
 
@@ -44,3 +44,11 @@ adb shell am instrument -w -e contract_base http://127.0.0.1:3108/api/v1 net.cre
 ```
 
 Physical-device capture, camera permission recovery and upload interruptions need additional device testing before release.
+
+## Developer-configured facial collection
+
+Choose the compliance profile on your server when creating the case. The recipient does not choose a profile or verification mode. The SDK collects outstanding documents first, then opens the selfie step only when the case requests `facial_verification`. Selfie-only cases go directly to that step. Document alternatives and capture-source choices follow the server's requirement rules.
+
+The selfie step uses the front camera, provides a preview and retake action, and sends only after confirmation. Uploads use the scoped biometric endpoint; facial submissions reference the uploaded file ID. Retrying a send reuses its upload and submission keys. A receipt confirms collection for review, not a face match or liveness result.
+
+The backend currently reports liveness, trusted camera and deepfake detection as unavailable. Automated face matching and validated liveness processing are not implemented by this capture interface. Forms and location checks return control to the host app. Example apps obtain their requirements from the demo server without a recipient-facing profile selector.

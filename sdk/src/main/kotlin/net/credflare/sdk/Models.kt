@@ -36,14 +36,15 @@ data class DocumentRequirement(val id: Int, val name: String, val policy: String
         }
     }
 }
-data class SessionInfo(val environment: String, val requesterName: String?, val maxFileSizeBytes: Long, val allowedFileTypes: List<String>, val documents: List<DocumentRequirement>, val needsHostSteps: Boolean) {
+data class SessionInfo(val environment: String, val requesterName: String?, val maxFileSizeBytes: Long, val allowedFileTypes: List<String>, val documents: List<DocumentRequirement>, val needsHostSteps: Boolean, val requiresSelfie: Boolean = false) {
     companion object {
         fun fromJson(value: JSONObject): SessionInfo {
             val limits = value.getJSONObject("upload_limits")
             val types = limits.getJSONArray("allowed_file_types")
             val profile = value.optJSONObject("profile")
             val docs = profile?.optJSONArray("document_requirements") ?: JSONArray()
-            return SessionInfo(value.getString("environment"), value.optJSONObject("requester")?.optString("name"), limits.getLong("max_file_size_bytes"), (0 until types.length()).map { types.getString(it).lowercase() }, (0 until docs.length()).map { DocumentRequirement.fromJson(docs.getJSONObject(it)) }, profile == null || (profile.optJSONArray("form_schema")?.length() ?: 0) > 0 || (profile?.optJSONArray("verification_requirements")?.length() ?: 0) > 0)
+            return SessionInfo(value.getString("environment"), value.optJSONObject("requester")?.optString("name"), limits.getLong("max_file_size_bytes"), (0 until types.length()).map { types.getString(it).lowercase() }, (0 until docs.length()).map { DocumentRequirement.fromJson(docs.getJSONObject(it)) }, profile == null || (profile.optJSONArray("form_schema")?.length() ?: 0) > 0 || (0 until (profile.optJSONArray("verification_requirements")?.length() ?: 0)).any { profile.getJSONArray("verification_requirements").getJSONObject(it).optString("verification_type") != "facial_verification" },
+                (0 until (profile?.optJSONArray("verification_requirements")?.length() ?: 0)).any { profile!!.getJSONArray("verification_requirements").getJSONObject(it).optString("verification_type") == "facial_verification" })
         }
     }
 }
