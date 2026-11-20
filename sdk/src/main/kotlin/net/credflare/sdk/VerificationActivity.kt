@@ -68,7 +68,7 @@ class VerificationActivity: Activity() {
     private fun closeRequested() {
         val current = flow ?: return finish()
         if(current.busy) return
-        if(current.info != null && !current.pendingReceipt && current.info!!.documents.isEmpty() && !current.info!!.needsHostSteps && !current.info!!.requiresSelfie) { result(VerificationResult.SUBMITTED); return }
+        if(current.info != null && !current.pendingReceipt && current.info!!.documents.isEmpty() && !current.info!!.needsHostSteps && !current.info!!.requiresFacial) { result(VerificationResult.SUBMITTED); return }
         val body = if(current.captures.isNotEmpty()) "Your unsent photos and files will be discarded. Documents you already sent are kept." else "Documents you already sent are kept. You can return through the app that requested them."
         AlertDialog.Builder(this).setTitle("Leave verification?").setMessage(body).setNegativeButton("Continue", null).setPositiveButton("Leave for now") { _,_ -> result(VerificationResult.CANCELLED) }.show()
     }
@@ -108,7 +108,7 @@ class VerificationActivity: Activity() {
         } else if(current.pendingReceipt) {
             text("Your evidence was sent",24f); text("Check your progress to see what is still needed.",secondary=true)
             button("Check progress") { work { current.info = current.client!!.get(); current.pendingReceipt=false } }
-        } else if(current.info!!.documents.isEmpty() && current.info!!.requiresSelfie) {
+        } else if(current.info!!.documents.isEmpty() && current.info!!.requiresFacial) {
             selfie(current)
         } else if(current.info!!.documents.isEmpty()) {
             text("Evidence received",24f)
@@ -117,7 +117,7 @@ class VerificationActivity: Activity() {
         } else if(current.document != null) capture(current)
         else {
             text("Documents requested",24f)
-            if(current.info!!.requiresSelfie) text(if(current.info!!.needsHostSteps) "After your ID: take a selfie, then continue the remaining steps in the requesting app." else "After your ID: take a selfie.",secondary=true)
+            if(current.info!!.requiresFacial) text(if(current.info!!.needsHostSteps) "After your ID: take a selfie, then continue the remaining steps in the requesting app." else "After your ID: take a selfie.",secondary=true)
             var lastGroup: String? = null
             for(doc in current.info!!.documents) {
                 if(doc.rule == "any_of" && doc.groupKey != lastGroup) text("Choose ${doc.remainingRequired} from this group",14f,true)
@@ -148,7 +148,7 @@ class VerificationActivity: Activity() {
         } else button("Open front camera") { camera() }
         text("Your selfie will be sent to your verifier for review.",13f,true)
     }
-    private fun isSelfie() = flow?.info?.let { it.documents.isEmpty() && it.requiresSelfie } ?: false
+    private fun isSelfie() = flow?.info?.let { it.documents.isEmpty() && it.requiresFacial } ?: false
     private fun capture(current: CredflareVerification.Launch) {
         val doc=current.document!!; val steps=doc.captureSteps()
         button("‹ Documents") {

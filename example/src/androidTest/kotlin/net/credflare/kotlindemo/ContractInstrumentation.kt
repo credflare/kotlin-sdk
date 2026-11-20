@@ -35,22 +35,57 @@ class ContractInstrumentation: Instrumentation() {
             check(session.upload(bytes,"sample-front.png",CaptureSource.UPLOAD,DocumentSide.FRONT,info.documents[0].id,key) == 1)
             val uploaded=JSONObject(URL(base.substringBefore("/api/v1")+"/stats").readText())
             check(uploaded.getString("requestKey") == key.toString() && uploaded.getString("uploadSource") == "upload")
-            val facialSession=VerificationSession(descriptor("selfie"))
-            val facialInfo=facialSession.get()
-            check(facialInfo.requiresSelfie && !facialInfo.needsHostSteps && facialInfo.documents.isEmpty())
+            val facialInfo=VerificationSession(descriptor("selfie")).get()
+            check(facialInfo.requiresFacial && !facialInfo.needsHostSteps && facialInfo.documents.isEmpty())
+            val capture=VerificationSession(descriptor("capture"))
+            val captureInfo=capture.get()
+            check(captureInfo.requirements.map { it.type } == listOf("facial_verification","location_verification"))
+            check(captureInfo.requirements[1].location!!.reference == LocationReference("within",listOf("Head office")))
+            check(captureInfo.requirements[0].facial!!.gestureCount == 3 && captureInfo.requirements[1].location!!.maxAccuracyM == 50)
+            val challenge=capture.createLivenessChallenge()
+            check(challenge.challengeId == "01a1fb33-a1ee-71b2-bba9-9f484aa3bb1b" && challenge.gestures == listOf("blink","smile","turn_right") && challenge.recordVideo && challenge.maxVideoSeconds == 8)
+            val gestureKeys=challenge.gestures.map { UUID.randomUUID() }
+            val gestureIds=challenge.gestures.mapIndexed { index,gesture -> capture.uploadBiometric(bytes,"$gesture.png",BiometricUploadType.GESTURE,challenge.challengeId,gesture,gestureKeys[index]) }
+            check(gestureIds == listOf(3,3,3))
+            val videoKey=UUID.randomUUID()
+            val videoId=capture.uploadBiometric("not-a-real-video".toByteArray(),"clip.mp4",BiometricUploadType.LIVENESS_VIDEO,challenge.challengeId,key=videoKey)
+            check(videoId == 5)
             val selfieKey=UUID.randomUUID()
-            val selfieId=facialSession.uploadSelfie(bytes,"selfie.png",selfieKey)
-            facialSession.submitSelfie(selfieId,UUID.randomUUID())
-            val facialStats=JSONObject(URL(base.substringBefore("/api/v1")+"/stats").readText())
-            check(facialStats.getString("selfieUpload").contains("name=\"capture_source\"\r\n\r\ncamera"))
-            check(!facialStats.getString("selfieUpload").contains("document_type_id"))
-            check(facialStats.getString("selfieKey") == selfieKey.toString())
-            val submitted=JSONObject(facialStats.getString("selfieBody"))
-            check(submitted.getString("type") == "facial_verification" && submitted.getInt("image_file_id") == selfieId)
+            val selfieId=capture.uploadBiometric(bytes,"selfie.png",BiometricUploadType.SELFIE,challenge.challengeId,key=selfieKey)
+            check(selfieId == 4)
+            try { capture.uploadBiometric(bytes,"frame.png",BiometricUploadType.GESTURE,challenge.challengeId,null,UUID.randomUUID()); error("Gesture frame without a gesture accepted") } catch(_: IllegalArgumentException) {}
+            val results=challenge.gestures.map { GestureResult(it,true,"2026-11-20T23:04:00Z") }
+            check(capture.submitFacial(FacialSubmission(challenge.challengeId,selfieId,gestureIds.mapIndexed { index,_ -> 10+index },videoId,"mlkit",results,FaceDetectionSummary(true,1,true,true),"2026-11-20T23:04:10Z"),UUID.randomUUID()) == 1)
+            val fix=LocationFix(4.0511,9.7679,12.5,null,"2026-11-20T23:04:00Z",true,"gps","2026-11-20T23:04:02Z")
+            check(capture.submitLocation(fix,UUID.randomUUID()) == 2)
+            val captureStats=JSONObject(URL(base.substringBefore("/api/v1")+"/stats").readText())
+            check(captureStats.getInt("challengeRequests") == 1)
+            val uploads=captureStats.getJSONArray("biometrics")
+            check(uploads.length() == 5) { "Expected five biometric uploads, saw ${uploads.length()}" }
+            for(index in 0 until 3) {
+                val upload=uploads.getJSONObject(index)
+                check(upload.getString("type") == "gesture" && upload.getString("gesture") == challenge.gestures[index] && upload.getString("challenge_id") == challenge.challengeId && upload.getString("capture_source") == "camera" && upload.getString("key") == gestureKeys[index].toString())
+            }
+            uploads.getJSONObject(3).let { check(it.getString("type") == "liveness_video" && it.getString("content_type") == "video/mp4" && it.getString("capture_source") == "camera" && it.getString("challenge_id") == challenge.challengeId && it.isNull("gesture") && it.getString("key") == videoKey.toString()) }
+            uploads.getJSONObject(4).let { check(it.getString("type") == "selfie" && it.getString("capture_source") == "camera" && it.getString("challenge_id") == challenge.challengeId && it.isNull("gesture") && !it.getJSONArray("fields").toString().contains("document_type_id") && it.getString("key") == selfieKey.toString()) }
+            val facial=JSONObject(captureStats.getString("facialBody"))
+            check(facial.getString("type") == "facial_verification" && facial.getString("challenge_id") == challenge.challengeId && facial.getInt("image_file_id") == selfieId && facial.getInt("video_file_id") == videoId)
+            check(facial.getJSONArray("gesture_file_ids").toString() == "[10,11,12]")
+            val facialMetadata=facial.getJSONObject("metadata")
+            check(facialMetadata.getString("provider") == "mlkit" && facialMetadata.getJSONArray("liveness_results").length() == 3 && facialMetadata.getJSONObject("face_detection").getInt("face_count") == 1 && facialMetadata.has("captured_at"))
+            check(facialMetadata.getJSONArray("liveness_results").getJSONObject(0).let { it.getString("challenge") == "blink" && it.getBoolean("completed") && it.has("timestamp") })
+            val location=JSONObject(captureStats.getString("locationBody"))
+            val locationMetadata=location.getJSONObject("metadata")
+            check(location.getString("type") == "location_verification" && location.getDouble("latitude") == 4.0511 && location.getDouble("longitude") == 9.7679)
+            check(locationMetadata.getDouble("accuracy") == 12.5 && locationMetadata.isNull("altitude") && locationMetadata.getBoolean("is_mock") && locationMetadata.getString("provider") == "gps" && locationMetadata.getString("fix_time") == "2026-11-20T23:04:00Z" && locationMetadata.has("captured_at"))
+            try { VerificationSession(descriptor("reject-location")).submitLocation(fix,UUID.randomUUID()); error("Location rejection was not surfaced") }
+            catch(error: CredflareException) { check(error.status == 422 && error.type == "validation" && error.message == "The location is not accurate enough. Move to an open area and try again.") { "Unexpected rejection ${error.status} ${error.message}" } }
+            try { VerificationSession(descriptor("reject-place")).submitLocation(fix,UUID.randomUUID()); error("Place rejection was not surfaced") }
+            catch(error: CredflareException) { check(error.status == 422 && error.message == "Your location does not meet the place requirement for this verification.") }
             session.cancel()
             check(!descriptor().toString().contains("test-session-token"))
             try { SessionDescriptor(UUID.randomUUID(),"test-token","http://example.test","2030-01-01"); error("Unsafe URL accepted") } catch(_: IllegalArgumentException) {}
-            output.putString(REPORT_KEY_STREAMRESULT,"PASS: native HTTP contract, capture rules, authentication, timeout, interrupted body, redirects, selfie collection, upload metadata and credential redaction")
+            output.putString(REPORT_KEY_STREAMRESULT,"PASS: native HTTP contract, capture rules, authentication, timeout, interrupted body, redirects, requirement settings, liveness challenge, gesture, video and selfie uploads, facial and location submissions, location rejections, upload metadata and credential redaction")
             finish(Activity.RESULT_OK,output)
         } catch(error: Throwable) {
             output.putString(REPORT_KEY_STREAMRESULT,"FAIL: ${error.javaClass.simpleName}: ${error.message}")

@@ -11,4 +11,15 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - run: ./gradlew :sdk:assembleDebug :example:assembleDebug :example:assembleDebugAndroidTest lint
+      - run: ./gradlew :sdk:assembleDebug :sdk:testDebugUnitTest :example:assembleDebug :example:assembleDebugAndroidTest lint
+  spec:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: kotlin-sdk
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: credflare/sdk-spec
+          path: sdk-spec
+      - run: ./kotlin-sdk/scripts/check-spec.sh

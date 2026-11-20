@@ -53,28 +53,33 @@ class VerificationSession(private var descriptor: SessionDescriptor, private val
     }
     fun get(): SessionInfo = SessionInfo.fromJson(request("GET").getJSONObject("data"))
     fun cancel() { request("DELETE") }
-    fun upload(bytes: ByteArray, filename: String, source: CaptureSource, side: DocumentSide, documentTypeId: Int, key: UUID): Int = uploadEvidence(bytes,filename,source,side,documentTypeId,key)
-    fun uploadSelfie(bytes: ByteArray, filename: String, key: UUID): Int {
-        require(filename.substringAfterLast('.').lowercase() in listOf("jpg","jpeg","png","webp")) { "Use a supported selfie image format." }
-        return uploadEvidence(bytes,filename,CaptureSource.CAMERA,DocumentSide.FRONT,null,key)
+    fun createLivenessChallenge(): LivenessChallenge = LivenessChallenge.fromJson(request("POST", "/liveness-challenges", "{}".toByteArray(Charsets.UTF_8), "application/json").getJSONObject("data"))
+    fun upload(bytes: ByteArray, filename: String, source: CaptureSource, side: DocumentSide, documentTypeId: Int, key: UUID): Int =
+        uploadMultipart("/uploads/documents", bytes, filename, listOf("side" to side.value, "capture_source" to source.value, "document_type_id" to documentTypeId.toString()), key)
+    fun uploadBiometric(bytes: ByteArray, filename: String, type: BiometricUploadType, challengeId: String, gesture: String? = null, key: UUID): Int {
+        val extension = filename.substringAfterLast('.').lowercase()
+        require(if(type == BiometricUploadType.LIVENESS_VIDEO) extension in listOf("mp4", "mov", "webm") else extension in listOf("jpg", "jpeg", "png", "webp")) { "Use a supported format for this capture." }
+        require((type == BiometricUploadType.GESTURE) == (gesture != null)) { "A gesture name is required for gesture frames only." }
+        val fields = listOf("type" to type.value, "challenge_id" to UUID.fromString(challengeId).toString()) + listOfNotNull(gesture?.let { "gesture" to it }) + listOf("capture_source" to CaptureSource.CAMERA.value)
+        return uploadMultipart("/uploads/biometrics", bytes, filename, fields, key)
     }
-    private fun uploadEvidence(bytes: ByteArray, filename: String, source: CaptureSource, side: DocumentSide, documentTypeId: Int?, key: UUID): Int {
+    private fun uploadMultipart(suffix: String, bytes: ByteArray, filename: String, fields: List<Pair<String, String>>, key: UUID): Int {
         require(filename.isNotBlank() && filename.none { it in "\r\n\"/\\" }) { "Choose a file with a valid name." }
-        val mime = when(filename.substringAfterLast('.').lowercase()) { "jpg", "jpeg" -> "image/jpeg"; "png" -> "image/png"; "webp" -> "image/webp"; "pdf" -> "application/pdf"; "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"; else -> throw IllegalArgumentException("This file type is not supported.") }
+        val mime = when(filename.substringAfterLast('.').lowercase()) { "jpg", "jpeg" -> "image/jpeg"; "png" -> "image/png"; "webp" -> "image/webp"; "pdf" -> "application/pdf"; "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"; "mp4" -> "video/mp4"; "mov" -> "video/quicktime"; "webm" -> "video/webm"; else -> throw IllegalArgumentException("This file type is not supported.") }
         val boundary = "Credflare-${UUID.randomUUID()}"
         val body = ByteArrayOutputStream()
         fun text(value: String) { body.write(value.toByteArray(Charsets.UTF_8)) }
-        for((name,value) in listOf("side" to side.value, "capture_source" to source.value, "document_type_id" to documentTypeId?.toString().orEmpty()).filter { it.second.isNotEmpty() }) text("--$boundary\r\nContent-Disposition: form-data; name=\"$name\"\r\n\r\n$value\r\n")
+        for((name,value) in fields) text("--$boundary\r\nContent-Disposition: form-data; name=\"$name\"\r\n\r\n$value\r\n")
         text("--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"$filename\"\r\nContent-Type: $mime\r\n\r\n")
         body.write(bytes); text("\r\n--$boundary--\r\n")
-        return request("POST", if(documentTypeId == null) "/uploads/biometrics" else "/uploads/documents", body.toByteArray(), "multipart/form-data; boundary=$boundary", key).getJSONObject("data").getInt("id")
+        return request("POST", suffix, body.toByteArray(), "multipart/form-data; boundary=$boundary", key).getJSONObject("data").getInt("id")
     }
-    fun submitSelfie(imageFileId: Int, key: UUID): Int {
-        val payload = JSONObject().put("type", "facial_verification").put("image_file_id", imageFileId)
-        return request("POST", "/submit", payload.toString().toByteArray(Charsets.UTF_8), "application/json", key).getJSONObject("data").getInt("id")
-    }
-    fun submit(documentTypeId: Int, evidence: List<Evidence>, key: UUID): Int {
-        val payload = JSONObject().put("type", "document_verification").put("document_type_id", documentTypeId).put("evidence", JSONArray(evidence.map { it.json() }))
-        return request("POST", "/submit", payload.toString().toByteArray(Charsets.UTF_8), "application/json", key).getJSONObject("data").getInt("id")
-    }
+    fun uploadSelfie(bytes: ByteArray, filename: String, key: UUID): Int = uploadMultipart("/uploads/biometrics", bytes, filename, listOf("side" to "front", "capture_source" to "camera"), key)
+    fun submitSelfie(imageFileId: Int, key: UUID): Int = submitJson(JSONObject().put("type", "facial_verification").put("image_file_id", imageFileId), key)
+    fun submitFacial(submission: FacialSubmission, key: UUID): Int = submitJson(submission.json(), key)
+    fun submitLocation(fix: LocationFix, key: UUID): Int = submitJson(fix.json(), key)
+    fun submit(documentTypeId: Int, evidence: List<Evidence>, key: UUID): Int =
+        submitJson(JSONObject().put("type", "document_verification").put("document_type_id", documentTypeId).put("evidence", JSONArray(evidence.map { it.json() })), key)
+    private fun submitJson(payload: JSONObject, key: UUID): Int =
+        request("POST", "/submit", payload.toString().toByteArray(Charsets.UTF_8), "application/json", key).getJSONObject("data").getInt("id")
 }

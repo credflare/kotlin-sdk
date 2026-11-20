@@ -5,5 +5,10 @@ android {
     defaultConfig { minSdk = 24; consumerProguardFiles("consumer-rules.pro") }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
+    sourceSets["test"].resources.srcDirs("src/test/resources", "../example/src/androidTest/assets")
 }
-dependencies { implementation("androidx.core:core:1.18.0") }
+dependencies {
+    implementation("androidx.core:core:1.18.0")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20250517")
+}
