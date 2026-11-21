@@ -35,7 +35,7 @@ cp ../sdk-spec/fixtures/liveness-traces/*.json sdk/src/test/resources/liveness-t
 
 ## Contract suite on a device
 
-The instrumentation calls the real client against `scripts/contract-server.mjs`, which serves the spec fixtures and records what the client sent. It covers sessions, document uploads, requirement settings, the liveness challenge, gesture, video and selfie uploads with their multipart fields and idempotency keys, facial and location submissions with their idempotency keys, and `422` location rejections with their codes.
+The instrumentation calls the real client against `scripts/contract-server.mjs`, which serves the spec fixtures and records what the client sent. It covers sessions, document uploads, requirement settings, the liveness challenge, gesture, video and selfie uploads with their multipart fields and idempotency keys, facial and location submissions with their idempotency keys, `422` location rejections with their codes, and a real `422` for every spec rejection code.
 
 ```sh
 PORT=3118 node scripts/contract-server.mjs example/src/androidTest/assets &

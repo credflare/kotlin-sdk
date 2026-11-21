@@ -115,4 +115,14 @@ class ContractServerTest {
         val outside = try { session("reject:${CredflareSpec.ErrorCode.LOCATION_REFERENCE_NOT_MATCHED}").submitLocation(fix, UUID.randomUUID()); fail(); throw IllegalStateException() } catch(error: CredflareException) { error }
         assertEquals("You seem to be too close to Depot. Move away, then try again.", Rejections.locationMessage(outside, LocationReference("outside", "all", listOf("Depot")), "Acme"))
     }
+
+    @Test
+    fun realFixtureWithUnknownCodeKeepsTheRawCodeAndShowsTheServerMessage() {
+        val envelope = JSONObject(File("../example/src/androidTest/assets/rejections/location.accuracy.json").readText()).put("code", "location.not_in_spec")
+        val error = CredflareException.fromEnvelope(422, envelope)
+        assertEquals("location.not_in_spec", error.code)
+        assertFalse(error.isKnownCode)
+        assertEquals(envelope.getString("message"), Rejections.locationMessage(error, null, "Acme"))
+        assertEquals(envelope.getString("message"), Rejections.livenessMessage(error, "Acme"))
+    }
 }

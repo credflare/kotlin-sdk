@@ -94,10 +94,22 @@ class ContractInstrumentation: Instrumentation() {
             catch(error: CredflareException) { check(error.status == 422 && error.type == "validation" && error.code == CredflareSpec.ErrorCode.LOCATION_ACCURACY && error.isKnownCode) { "Unexpected rejection ${error.status} ${error.code}" } }
             try { VerificationSession(descriptor("reject-place")).submitLocation(fix,UUID.randomUUID()); error("Place rejection was not surfaced") }
             catch(error: CredflareException) { check(error.status == 422 && error.code == CredflareSpec.ErrorCode.LOCATION_REFERENCE_NOT_MATCHED) }
+            val rejections=context.assets.list("rejections")!!.filter { it.endsWith(".json") }.sorted()
+            check(rejections.map { it.removeSuffix(".json") } == CredflareSpec.ErrorCode.MEANINGS.keys.sorted()) { "Rejection fixtures do not cover every spec code" }
+            for(name in rejections) {
+                val code=name.removeSuffix(".json")
+                val message=JSONObject(context.assets.open("rejections/$name").bufferedReader().use { it.readText() }).getString("message")
+                val client=VerificationSession(descriptor("reject:$code"))
+                try {
+                    if(code.startsWith("location.")) client.submitLocation(fix,UUID.randomUUID())
+                    else client.submitFacial(FacialSubmission(challenge.challengeId,1,listOf(2),3,"mlkit",results,FaceDetectionSummary(true,1,true,true),"2026-11-20T23:04:10Z"),UUID.randomUUID())
+                    error("$code was not rejected")
+                } catch(error: CredflareException) { check(error.status == 422 && error.code == code && error.isKnownCode && error.message == message) { "Unexpected rejection for $code: ${error.code}" } }
+            }
             session.cancel()
             check(!descriptor().toString().contains("test-session-token"))
             try { SessionDescriptor(UUID.randomUUID(),"test-token","http://example.test","2030-01-01"); error("Unsafe URL accepted") } catch(_: IllegalArgumentException) {}
-            output.putString(REPORT_KEY_STREAMRESULT,"PASS: native HTTP contract, capture rules, authentication, timeout, interrupted body, redirects, requirement settings, liveness challenge, gesture, video and selfie uploads, facial and location submissions, location rejections, upload metadata and credential redaction")
+            output.putString(REPORT_KEY_STREAMRESULT,"PASS: native HTTP contract, capture rules, authentication, timeout, interrupted body, redirects, requirement settings, liveness challenge, gesture, video and selfie uploads, facial and location submissions, location rejections, every spec rejection code, upload metadata and credential redaction")
             finish(Activity.RESULT_OK,output)
         } catch(error: Throwable) {
             output.putString(REPORT_KEY_STREAMRESULT,"FAIL: ${error.javaClass.simpleName}: ${error.message}")
