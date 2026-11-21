@@ -27,7 +27,7 @@ class SettingsParsingTest {
         assertEquals(LocationReference("within", "any", listOf("Head office")), location.reference)
         assertTrue(info.requiresFacial && info.requiresLocation)
         assertFalse(info.needsHostSteps)
-        assertEquals("Meghan Stiedemann MD's Workspace", info.requesterName)
+        assertEquals("Mrs. Jakayla Kris's Workspace", info.requesterName)
     }
 
     @Test
@@ -44,8 +44,8 @@ class SettingsParsingTest {
     @Test
     fun parsesLivenessChallenge() {
         val challenge = LivenessChallenge.fromJson(fixture("liveness-challenge.json"))
-        assertEquals("01a1fb33-a1ee-71b2-bba9-9f484aa3bb1b", challenge.challengeId)
-        assertEquals(listOf("blink", "smile", "turn_right"), challenge.gestures)
+        assertEquals("01a1fb8d-6c01-7160-a4fe-31853bb8dbdd", challenge.challengeId)
+        assertEquals(listOf("nod", "turn_right", "turn_left"), challenge.gestures)
         assertTrue(challenge.recordVideo)
         assertEquals(8, challenge.maxVideoSeconds)
     }

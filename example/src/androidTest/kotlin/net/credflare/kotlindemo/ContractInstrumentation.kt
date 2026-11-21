@@ -49,7 +49,7 @@ class ContractInstrumentation: Instrumentation() {
             check(captureInfo.requirements[0].facial!!.gestureCount == 3 && captureInfo.requirements[1].location!!.maxAccuracyM == 50)
             val before=JSONObject(URL(base.substringBefore("/api/v1")+"/stats").readText())
             val challenge=capture.createLivenessChallenge()
-            check(challenge.challengeId == "01a1fb33-a1ee-71b2-bba9-9f484aa3bb1b" && challenge.gestures == listOf("blink","smile","turn_right") && challenge.recordVideo && challenge.maxVideoSeconds == 8)
+            check(challenge.challengeId == "01a1fb8d-6c01-7160-a4fe-31853bb8dbdd" && challenge.gestures == listOf("nod","turn_right","turn_left") && challenge.recordVideo && challenge.maxVideoSeconds == 8)
             val gestureKeys=challenge.gestures.map { UUID.randomUUID() }
             val gestureIds=challenge.gestures.mapIndexed { index,gesture -> capture.uploadBiometric(bytes,"$gesture.png",BiometricUploadType.GESTURE,challenge.challengeId,gesture,gestureKeys[index]) }
             check(gestureIds == listOf(3,3,3))
@@ -81,7 +81,7 @@ class ContractInstrumentation: Instrumentation() {
             check(facial.getJSONArray("gesture_file_ids").toString() == "[10,11,12]")
             val facialMetadata=facial.getJSONObject("metadata")
             check(facialMetadata.getString("provider") == "mlkit" && facialMetadata.getJSONArray("liveness_results").length() == 3 && facialMetadata.getJSONObject("face_detection").getInt("face_count") == 1 && facialMetadata.has("captured_at"))
-            check(facialMetadata.getJSONArray("liveness_results").getJSONObject(0).let { it.getString("challenge") == "blink" && it.getBoolean("completed") && it.has("timestamp") })
+            check(facialMetadata.getJSONArray("liveness_results").getJSONObject(0).let { it.getString("challenge") == "nod" && it.getBoolean("completed") && it.has("timestamp") })
             val location=JSONObject(captureStats.getString("locationBody"))
             val locationMetadata=location.getJSONObject("metadata")
             check(location.getString("type") == "location_verification" && location.getDouble("latitude") == 4.0511 && location.getDouble("longitude") == 9.7679)

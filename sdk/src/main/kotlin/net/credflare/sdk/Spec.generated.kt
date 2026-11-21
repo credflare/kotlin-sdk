@@ -1,5 +1,5 @@
 // GENERATED FILE, DO NOT EDIT.
-// Source: credflare sdk-spec 1.0.0 (1ee014f4a1df). Regenerate with scripts/generate.mjs.
+// Source: credflare sdk-spec 1.0.0 (13c02ea43d7a). Regenerate with scripts/generate.mjs.
 @file:Suppress("unused", "MemberVisibilityCanBePrivate")
 
 package net.credflare.sdk
@@ -62,7 +62,7 @@ data class SpecIcon(
 
 object CredflareSpec {
     const val VERSION: String = "1.0.0"
-    const val HASH: String = "1ee014f4a1df"
+    const val HASH: String = "13c02ea43d7a"
 
     object Liveness {
         const val VERSION: Int = 1
@@ -769,6 +769,39 @@ object CredflareSpec {
         const val ERRORS_SEND_SELFIE_FAILED: String = "errors.send_selfie_failed"
         const val ERRORS_CHALLENGE_FAILED: String = "errors.challenge_failed"
         const val ERRORS_SEND_LOCATION_FAILED: String = "errors.send_location_failed"
+    }
+
+    object ErrorCode {
+        const val LOCATION_ACCURACY: String = "location.accuracy"
+        const val LOCATION_STALE: String = "location.stale"
+        const val LOCATION_MOCK: String = "location.mock"
+        const val LOCATION_IP_COUNTRY: String = "location.ip_country"
+        const val LOCATION_REFERENCE_NOT_MATCHED: String = "location.reference_not_matched"
+        const val LIVENESS_CHALLENGE_INVALID: String = "liveness.challenge_invalid"
+        const val LIVENESS_CHALLENGE_EXPIRED: String = "liveness.challenge_expired"
+        const val LIVENESS_CHALLENGE_USED: String = "liveness.challenge_used"
+        const val LIVENESS_GESTURE_MISMATCH: String = "liveness.gesture_mismatch"
+        const val LIVENESS_FRAME_OUT_OF_WINDOW: String = "liveness.frame_out_of_window"
+        const val LIVENESS_NOT_CAMERA: String = "liveness.not_camera"
+        const val LIVENESS_VIDEO_MISSING: String = "liveness.video_missing"
+        const val LIVENESS_VIDEO_TOO_LONG: String = "liveness.video_too_long"
+        const val LIVENESS_VIDEO_UNREADABLE: String = "liveness.video_unreadable"
+        val MEANINGS: Map<String, String> = mapOf(
+            "location.accuracy" to "Accuracy is missing or larger than max_accuracy_m",
+            "location.stale" to "fix_time is missing, older than max_age_s plus clock_skew_s, or in the future",
+            "location.mock" to "is_mock is true and mock_location is reject",
+            "location.ip_country" to "The IP country does not match and ip_country is reject",
+            "location.reference_not_matched" to "The place rule failed and on_mismatch is reject",
+            "liveness.challenge_invalid" to "The challenge is unknown, belongs to another case or was replaced",
+            "liveness.challenge_expired" to "The challenge expired",
+            "liveness.challenge_used" to "The challenge was already used",
+            "liveness.gesture_mismatch" to "A gesture frame is missing, extra, out of order or for a gesture the challenge does not include",
+            "liveness.frame_out_of_window" to "A file was uploaded before the challenge was issued or after it expired",
+            "liveness.not_camera" to "Evidence was not uploaded with capture_source=camera for this challenge",
+            "liveness.video_missing" to "record_video is on and no video for this challenge was sent",
+            "liveness.video_too_long" to "The video is longer than max_video_seconds plus one second",
+            "liveness.video_unreadable" to "The server cannot read the video duration",
+        )
     }
 
     object Tokens {
