@@ -45,12 +45,12 @@ data class FacialSettings(val gestures: List<String>, val gestureCount: Int, val
             value?.optInt("video_retention_days", CredflareSpec.Settings.FACIAL_VERIFICATION_VIDEO_RETENTION_DAYS_DEFAULT) ?: CredflareSpec.Settings.FACIAL_VERIFICATION_VIDEO_RETENTION_DAYS_DEFAULT)
     }
 }
-data class LocationReference(val rule: String, val placeLabels: List<String>) {
+data class LocationReference(val rule: String, val match: String, val placeLabels: List<String>) {
     companion object {
         fun fromJson(value: JSONObject?): LocationReference? {
             if(value == null) return null
             val places = value.optJSONArray("places") ?: JSONArray()
-            return LocationReference(value.optString("rule").ifEmpty { "within" }, (0 until places.length()).mapNotNull { places.optJSONObject(it)?.optString("label")?.takeIf { label -> label.isNotBlank() } })
+            return LocationReference(value.optString("rule").ifEmpty { "within" }, value.optString("match").ifEmpty { "any" }, (0 until places.length()).mapNotNull { places.optJSONObject(it)?.optString("label")?.takeIf { label -> label.isNotBlank() } })
         }
     }
 }
@@ -129,3 +129,9 @@ data class Evidence(val fileId: Int, val source: CaptureSource, val side: Docume
     internal fun json() = JSONObject().put("file_id", fileId).put("source", source.value).put("side", side.value)
 }
 enum class VerificationResult { SUBMITTED, CANCELLED, HOST_ACTION_REQUIRED, FAILED }
+internal object IsoTime {
+    private fun formatter() = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.ROOT).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+    fun format(millis: Long): String = formatter().format(java.util.Date(millis))
+    fun now(): String = format(System.currentTimeMillis())
+    fun parse(value: String): java.util.Date? = try { formatter().parse(value) } catch(_: java.text.ParseException) { null }
+}

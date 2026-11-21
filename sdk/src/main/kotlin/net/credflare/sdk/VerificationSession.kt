@@ -74,8 +74,6 @@ class VerificationSession(private var descriptor: SessionDescriptor, private val
         body.write(bytes); text("\r\n--$boundary--\r\n")
         return request("POST", suffix, body.toByteArray(), "multipart/form-data; boundary=$boundary", key).getJSONObject("data").getInt("id")
     }
-    fun uploadSelfie(bytes: ByteArray, filename: String, key: UUID): Int = uploadMultipart("/uploads/biometrics", bytes, filename, listOf("side" to "front", "capture_source" to "camera"), key)
-    fun submitSelfie(imageFileId: Int, key: UUID): Int = submitJson(JSONObject().put("type", "facial_verification").put("image_file_id", imageFileId), key)
     fun submitFacial(submission: FacialSubmission, key: UUID): Int = submitJson(submission.json(), key)
     fun submitLocation(fix: LocationFix, key: UUID): Int = submitJson(fix.json(), key)
     fun submit(documentTypeId: Int, evidence: List<Evidence>, key: UUID): Int =

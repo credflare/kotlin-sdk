@@ -22,12 +22,21 @@ object CredflareVerification {
         var error: String? = null
         var submitKey = UUID.randomUUID()
         val captures = mutableMapOf<String, SelectedFile>()
+        var busyMessage: String? = null
+        var challenge: LivenessChallenge? = null
+        @Volatile var liveness: LivenessCapture? = null
+        @Volatile var livenessError: String? = null
+        var locationFix: LocationFix? = null
+        var locationKey = UUID.randomUUID()
+        var locationFailures = 0
+        val received = mutableListOf<String>()
     }
     internal class SelectedFile(val bytes: ByteArray, val name: String, val source: CaptureSource) {
         val key = UUID.randomUUID()
         var fileId: Int? = null
     }
     internal val active = AtomicReference<Launch?>()
+    @Volatile var faceSignalProvider: () -> FaceSignalProvider = { MlKitFaceSignalProvider() }
     fun launch(activity: Activity, provider: SessionProvider, onResult: (VerificationResult) -> Unit): Boolean {
         val launch = Launch(provider, onResult)
         if(!active.compareAndSet(null, launch)) return false

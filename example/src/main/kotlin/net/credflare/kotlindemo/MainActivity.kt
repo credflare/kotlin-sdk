@@ -11,6 +11,7 @@ import java.net.URL
 class MainActivity: Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val demoUrl=intent.getStringExtra("demo_url")?.takeIf { it.startsWith("http://127.0.0.1:") } ?: "http://127.0.0.1:3107"
         val page=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(48,80,48,48) }
         page.addView(TextView(this).apply { text="Native Android SDK demo"; textSize=24f })
         page.addView(TextView(this).apply { text="Follow the steps requested by your verifier. Review your documents and selfie before sending."; textSize=16f; setPadding(0,24,0,24) })
@@ -19,7 +20,7 @@ class MainActivity: Activity() {
             text="Start verification"; isAllCaps=false
             setOnClickListener {
                 CredflareVerification.launch(this@MainActivity,SessionProvider {
-                    val connection=URL("http://127.0.0.1:3107/session").openConnection() as HttpURLConnection
+                    val connection=URL(demoUrl+"/session").openConnection() as HttpURLConnection
                     connection.connectTimeout=30000; connection.readTimeout=30000; connection.instanceFollowRedirects=false
                     connection.requestMethod="POST"; connection.doOutput=true
                     connection.setRequestProperty("Content-Type","application/json")

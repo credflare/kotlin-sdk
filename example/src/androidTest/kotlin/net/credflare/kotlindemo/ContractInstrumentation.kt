@@ -45,8 +45,9 @@ class ContractInstrumentation: Instrumentation() {
             val capture=VerificationSession(descriptor("capture"))
             val captureInfo=capture.get()
             check(captureInfo.requirements.map { it.type } == listOf("facial_verification","location_verification"))
-            check(captureInfo.requirements[1].location!!.reference == LocationReference("within",listOf("Head office")))
+            check(captureInfo.requirements[1].location!!.reference == LocationReference("within","any",listOf("Head office")))
             check(captureInfo.requirements[0].facial!!.gestureCount == 3 && captureInfo.requirements[1].location!!.maxAccuracyM == 50)
+            val before=JSONObject(URL(base.substringBefore("/api/v1")+"/stats").readText())
             val challenge=capture.createLivenessChallenge()
             check(challenge.challengeId == "01a1fb33-a1ee-71b2-bba9-9f484aa3bb1b" && challenge.gestures == listOf("blink","smile","turn_right") && challenge.recordVideo && challenge.maxVideoSeconds == 8)
             val gestureKeys=challenge.gestures.map { UUID.randomUUID() }
@@ -64,9 +65,11 @@ class ContractInstrumentation: Instrumentation() {
             val fix=LocationFix(4.0511,9.7679,12.5,null,"2026-11-20T23:04:00Z",true,"gps","2026-11-20T23:04:02Z")
             check(capture.submitLocation(fix,UUID.randomUUID()) == 2)
             val captureStats=JSONObject(URL(base.substringBefore("/api/v1")+"/stats").readText())
-            check(captureStats.getInt("challengeRequests") == 1)
-            val uploads=captureStats.getJSONArray("biometrics")
-            check(uploads.length() == 5) { "Expected five biometric uploads, saw ${uploads.length()}" }
+            check(captureStats.getInt("challengeRequests") == before.getInt("challengeRequests")+1)
+            val all=captureStats.getJSONArray("biometrics")
+            val offset=before.getJSONArray("biometrics").length()
+            check(all.length()-offset == 5) { "Expected five biometric uploads, saw ${all.length()-offset}" }
+            val uploads=org.json.JSONArray((offset until all.length()).map { all.getJSONObject(it) })
             for(index in 0 until 3) {
                 val upload=uploads.getJSONObject(index)
                 check(upload.getString("type") == "gesture" && upload.getString("gesture") == challenge.gestures[index] && upload.getString("challenge_id") == challenge.challengeId && upload.getString("capture_source") == "camera" && upload.getString("key") == gestureKeys[index].toString())

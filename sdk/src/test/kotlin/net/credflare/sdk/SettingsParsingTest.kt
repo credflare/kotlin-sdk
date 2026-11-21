@@ -24,7 +24,7 @@ class SettingsParsingTest {
         assertEquals(60, location.maxAgeS)
         assertEquals("reject", location.mockLocation)
         assertEquals("flag", location.ipCountry)
-        assertEquals(LocationReference("within", listOf("Head office")), location.reference)
+        assertEquals(LocationReference("within", "any", listOf("Head office")), location.reference)
         assertTrue(info.requiresFacial && info.requiresLocation)
         assertFalse(info.needsHostSteps)
         assertEquals("Meghan Stiedemann MD's Workspace", info.requesterName)

@@ -1,5 +1,5 @@
 // GENERATED FILE, DO NOT EDIT.
-// Source: credflare sdk-spec 1.0.0 (4cd1169538d1). Regenerate with scripts/generate.mjs.
+// Source: credflare sdk-spec 1.0.0 (1ee014f4a1df). Regenerate with scripts/generate.mjs.
 @file:Suppress("unused", "MemberVisibilityCanBePrivate")
 
 package net.credflare.sdk
@@ -62,7 +62,7 @@ data class SpecIcon(
 
 object CredflareSpec {
     const val VERSION: String = "1.0.0"
-    const val HASH: String = "4cd1169538d1"
+    const val HASH: String = "1ee014f4a1df"
 
     object Liveness {
         const val VERSION: Int = 1
@@ -443,6 +443,9 @@ object CredflareSpec {
             "documents.method_both" to "Photo and saved file",
             "documents.unavailable" to "Not available in this app. Contact {verifier}.",
             "documents.selfie_next" to "After your documents, you will take a selfie.",
+            "documents.location_next" to "After your documents, you will share your location.",
+            "documents.selfie_location_next" to "After your documents, you will take a selfie and share your location.",
+            "documents.location_selfie_next" to "After your documents, you will share your location and take a selfie.",
             "documents.host_steps_next" to "After your documents, the app will guide you through the remaining steps.",
             "capture.side_front" to "Front",
             "capture.side_back" to "Back",
@@ -553,6 +556,7 @@ object CredflareSpec {
             "location.place.need_within_all" to "You need to be at each of these places: {places}.",
             "location.place.need_outside" to "You need to be away from {place}.",
             "location.place.need_outside_all" to "You need to be away from these places: {places}.",
+            "location.place.need_outside_any" to "You need to be away from at least one of these places: {places}.",
             "location.place.not_matched_within" to "You do not seem to be at {place} yet. Move closer, then try again.",
             "location.place.not_matched_outside" to "You seem to be too close to {place}. Move away, then try again.",
             "location.place.not_precise" to "Your location is not precise enough to check this place. Move near a window or outside, then try again.",
@@ -623,6 +627,9 @@ object CredflareSpec {
         const val DOCUMENTS_METHOD_BOTH: String = "documents.method_both"
         const val DOCUMENTS_UNAVAILABLE: String = "documents.unavailable"
         const val DOCUMENTS_SELFIE_NEXT: String = "documents.selfie_next"
+        const val DOCUMENTS_LOCATION_NEXT: String = "documents.location_next"
+        const val DOCUMENTS_SELFIE_LOCATION_NEXT: String = "documents.selfie_location_next"
+        const val DOCUMENTS_LOCATION_SELFIE_NEXT: String = "documents.location_selfie_next"
         const val DOCUMENTS_HOST_STEPS_NEXT: String = "documents.host_steps_next"
         const val CAPTURE_SIDE_FRONT: String = "capture.side_front"
         const val CAPTURE_SIDE_BACK: String = "capture.side_back"
@@ -733,6 +740,7 @@ object CredflareSpec {
         const val LOCATION_PLACE_NEED_WITHIN_ALL: String = "location.place.need_within_all"
         const val LOCATION_PLACE_NEED_OUTSIDE: String = "location.place.need_outside"
         const val LOCATION_PLACE_NEED_OUTSIDE_ALL: String = "location.place.need_outside_all"
+        const val LOCATION_PLACE_NEED_OUTSIDE_ANY: String = "location.place.need_outside_any"
         const val LOCATION_PLACE_NOT_MATCHED_WITHIN: String = "location.place.not_matched_within"
         const val LOCATION_PLACE_NOT_MATCHED_OUTSIDE: String = "location.place.not_matched_outside"
         const val LOCATION_PLACE_NOT_PRECISE: String = "location.place.not_precise"
