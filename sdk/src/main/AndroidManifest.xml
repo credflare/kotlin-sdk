@@ -1,0 +1,15 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <application>
+        <activity android:name=".SelfieCameraActivity" android:exported="false" android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+        <activity android:name=".VerificationActivity" android:exported="false" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:enableOnBackInvokedCallback="true" />
+        <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.credflare.capture" android:exported="false" android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/credflare_capture_paths" />
+        </provider>
+    </application>
+</manifest>
