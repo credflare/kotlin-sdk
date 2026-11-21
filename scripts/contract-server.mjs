@@ -4,12 +4,12 @@ import {join} from 'node:path';
 const fixtures = process.argv[2];
 let redirectHits = 0, uploadSource = '', requestKey = '', selfieBody = '', selfieUpload = '', selfieKey = '';
 let challengeRequests = 0, facialBody = '', locationBody = '';
-const biometrics = [];
+const biometrics = [], submits = [];
 const trap = createServer((req,res) => { redirectHits++; res.end('{}'); }).listen(0,'127.0.0.1');
 const field = (body,name) => body.match(new RegExp(`name="${name}"\\r\\n\\r\\n([^\\r]*)`))?.[1] ?? null;
 const server = createServer(async (req,res) => {
  const token = req.headers.authorization;
- if (req.url === '/stats') {res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({redirectHits,uploadSource,requestKey,selfieBody,selfieUpload,selfieKey,challengeRequests,biometrics,facialBody,locationBody}));}
+ if (req.url === '/stats') {res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({redirectHits,uploadSource,requestKey,selfieBody,selfieUpload,selfieKey,challengeRequests,biometrics,submits,facialBody,locationBody}));}
  if (token === 'Bearer redirect') {res.writeHead(302,{Location:`http://127.0.0.1:${trap.address().port}/`});return res.end();}
  if (token === 'Bearer slow') {return setTimeout(() => {res.writeHead(200);res.end('{}');},2000);}
  if (token === 'Bearer broken-body') {res.writeHead(200,{'Content-Type':'application/json','Content-Length':'100000'});res.flushHeaders();res.write('{"success":');return setTimeout(()=>res.destroy(),40);}
@@ -30,6 +30,7 @@ const server = createServer(async (req,res) => {
  }
  if (req.url.endsWith('/submit')) {
   const text=raw.toString('utf8');
+  submits.push({type:(()=>{try{return JSON.parse(text).type}catch{return null}})(),key:req.headers['x-idempotency-key'] ?? null});
   if (text.includes('"location_verification"')) {locationBody=text;return token==='Bearer reject-location'?send(422,'location-rejection'):token==='Bearer reject-place'?send(422,'reference-rejection'):send(201,'location-submission');}
   if (text.includes('"facial_verification"')) {selfieBody=text;facialBody=text;return send(201,'facial-submission');}
   return send(201,'submission');

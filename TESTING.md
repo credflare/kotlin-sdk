@@ -10,6 +10,7 @@ Use JDK 17 and an Android SDK with API 36. Node 20 or newer runs the spec check 
 
 `:sdk:testDebugUnitTest` runs on the JVM:
 
+* `ContractServerTest` starts `scripts/contract-server.mjs` with Node and calls the real client against the spec fixtures. It asserts the idempotency key on every upload and submission and maps the rejection codes in the captured fixtures to the spec copy.
 * `GestureEngineTest` replays every trace in `sdk/src/test/resources/liveness-traces` (copied from `sdk-spec/fixtures/liveness-traces`) and asserts the expected outcome and position status.
 * `SettingsParsingTest` parses requirement settings, reference place labels and liveness challenges from the captured API fixtures.
 
@@ -33,7 +34,7 @@ cp ../sdk-spec/fixtures/liveness-traces/*.json sdk/src/test/resources/liveness-t
 
 ## Contract suite on a device
 
-The instrumentation calls the real client against `scripts/contract-server.mjs`, which serves the spec fixtures and records what the client sent. It covers sessions, document uploads, requirement settings, the liveness challenge, gesture, video and selfie uploads with their multipart fields and idempotency keys, facial and location submissions, and `422` location rejections.
+The instrumentation calls the real client against `scripts/contract-server.mjs`, which serves the spec fixtures and records what the client sent. It covers sessions, document uploads, requirement settings, the liveness challenge, gesture, video and selfie uploads with their multipart fields and idempotency keys, facial and location submissions with their idempotency keys, and `422` location rejections with their codes.
 
 ```sh
 PORT=3118 node scripts/contract-server.mjs example/src/androidTest/assets &

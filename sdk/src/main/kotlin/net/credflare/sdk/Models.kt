@@ -122,8 +122,13 @@ data class LocationFix(val latitude: Double, val longitude: Double, val accuracy
     internal fun json(): JSONObject = JSONObject().put("type", "location_verification").put("latitude", latitude).put("longitude", longitude)
         .put("metadata", JSONObject().put("accuracy", accuracy).put("altitude", altitude ?: JSONObject.NULL).put("fix_time", fixTime).put("is_mock", isMock ?: JSONObject.NULL).put("provider", provider ?: JSONObject.NULL).put("captured_at", capturedAt))
 }
-class CredflareException(val status: Int, message: String, cause: Throwable? = null): Exception(message, cause) {
+class CredflareException(val status: Int, message: String, cause: Throwable? = null, val code: String? = null): Exception(message, cause) {
     val type get() = when(status) { 0 -> "network"; 401 -> "session_unavailable"; 409 -> "verification_closed"; 422 -> "validation"; else -> "api" }
+    val isKnownCode get() = code != null && code in CredflareSpec.ErrorCode.MEANINGS
+    companion object {
+        fun fromEnvelope(status: Int, envelope: JSONObject) = CredflareException(status, envelope.optString("message", "Request failed."),
+            code = if(envelope.isNull("code")) null else envelope.optString("code").takeIf { it.isNotBlank() })
+    }
 }
 data class Evidence(val fileId: Int, val source: CaptureSource, val side: DocumentSide) {
     internal fun json() = JSONObject().put("file_id", fileId).put("source", source.value).put("side", side.value)

@@ -40,7 +40,7 @@ class VerificationSession(private var descriptor: SessionDescriptor, private val
                 if(expected >= 0 && expected != raw.size.toLong()) throw IOException("Incomplete response body")
                 val text = raw.toString(Charsets.UTF_8)
                 val envelope = try { JSONObject(text) } catch(error: JSONException) { throw CredflareException(status, "Credflare returned an invalid response.", error) }
-                if(status !in 200..299 || !envelope.optBoolean("success")) throw CredflareException(status, envelope.optString("message", "Request failed."))
+                if(status !in 200..299 || !envelope.optBoolean("success")) throw CredflareException.fromEnvelope(status, envelope)
                 envelope
             } catch(error: IOException) { throw CredflareException(0, "Could not reach Credflare. Retry with the same evidence.", error) }
             finally { connection.disconnect() }

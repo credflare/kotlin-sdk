@@ -27,9 +27,6 @@ import net.credflare.sdk.CredflareSpec.CopyKey as Key
 import net.credflare.sdk.CredflareSpec.Tokens as T
 
 class VerificationActivity: Activity() {
-    private companion object {
-        const val REFERENCE_REJECTION = "Your location does not meet the place requirement for this verification."
-    }
     private var flow: CredflareVerification.Launch? = null
     private lateinit var page: LinearLayout
     private val ui by lazy { SpecUi(this) }
@@ -265,10 +262,7 @@ class VerificationActivity: Activity() {
         val capture = current.liveness
         if(capture != null) {
             icon(CredflareSpec.Icons.VIDEO); title(copy(Key.LIVENESS_SUCCESS))
-            button(copy(Key.LIVENESS_RETRY)) {
-                val error = current.error
-                if(error != null && error != copy(Key.ERRORS_NETWORK)) { discardLiveness(current); startLiveness(current) } else sendLiveness(current)
-            }
+            button(copy(Key.LIVENESS_RETRY)) { sendLiveness(current) }
             return
         }
         icon(CredflareSpec.Icons.SELFIE)
@@ -297,15 +291,21 @@ class VerificationActivity: Activity() {
     private fun sendLiveness(current: CredflareVerification.Launch) {
         val capture = current.liveness ?: return
         work(copy(Key.LIVENESS_SENDING), Key.ERRORS_SEND_SELFIE_FAILED, {
-            val client = current.client!!
-            val id = capture.challenge.challengeId
-            capture.gestureFrames.forEachIndexed { index, bytes ->
-                if(capture.gestureIds[index] == null) capture.gestureIds[index] = client.uploadBiometric(bytes, "${capture.challenge.gestures[index]}.jpg", BiometricUploadType.GESTURE, id, capture.challenge.gestures[index], capture.gestureKeys[index])
+            try {
+                val client = current.client!!
+                val id = capture.challenge.challengeId
+                capture.gestureFrames.forEachIndexed { index, bytes ->
+                    if(capture.gestureIds[index] == null) capture.gestureIds[index] = client.uploadBiometric(bytes, "${capture.challenge.gestures[index]}.jpg", BiometricUploadType.GESTURE, id, capture.challenge.gestures[index], capture.gestureKeys[index])
+                }
+                val video = capture.video
+                if(video != null && capture.videoId == null) capture.videoId = client.uploadBiometric(video.readBytes(), "liveness.mp4", BiometricUploadType.LIVENESS_VIDEO, id, key = capture.videoKey)
+                if(capture.selfieId == null) capture.selfieId = client.uploadBiometric(capture.selfie, "selfie.jpg", BiometricUploadType.SELFIE, id, key = capture.selfieKey)
+                client.submitFacial(FacialSubmission(id, capture.selfieId!!, capture.gestureIds.map { it!! }, capture.videoId, capture.provider, capture.results, capture.faceDetection, capture.capturedAt), capture.submitKey)
+            } catch(error: CredflareException) {
+                if(error.status != 422) throw error
+                discardLiveness(current)
+                throw IllegalArgumentException(Rejections.livenessMessage(error, verifier))
             }
-            val video = capture.video
-            if(video != null && capture.videoId == null) capture.videoId = client.uploadBiometric(video.readBytes(), "liveness.mp4", BiometricUploadType.LIVENESS_VIDEO, id, key = capture.videoKey)
-            if(capture.selfieId == null) capture.selfieId = client.uploadBiometric(capture.selfie, "selfie.jpg", BiometricUploadType.SELFIE, id, key = capture.selfieKey)
-            client.submitFacial(FacialSubmission(id, capture.selfieId!!, capture.gestureIds.map { it!! }, capture.videoId, capture.provider, capture.results, capture.faceDetection, capture.capturedAt), capture.submitKey)
             current.received += copy(Key.RECEIPT_SELFIE)
             discardLiveness(current)
             refresh(current)
@@ -361,12 +361,7 @@ class VerificationActivity: Activity() {
             catch(error: CredflareException) {
                 if(error.status != 422) throw error
                 current.locationFix = null; current.locationFailures += 1
-                val reference = settings.reference?.takeIf { it.placeLabels.isNotEmpty() }
-                throw when {
-                    fix.isMock == true && settings.mockLocation == "reject" -> IllegalArgumentException(copy(Key.LOCATION_MOCK_DETECTED))
-                    reference != null && error.message == REFERENCE_REJECTION -> IllegalArgumentException(copy(if(reference.rule == "outside") Key.LOCATION_PLACE_NOT_MATCHED_OUTSIDE else Key.LOCATION_PLACE_NOT_MATCHED_WITHIN, "place" to places(reference)))
-                    else -> error
-                }
+                throw IllegalArgumentException(Rejections.locationMessage(error, settings.reference, verifier))
             }
             current.received += copy(Key.RECEIPT_LOCATION)
             current.locationFix = null

@@ -61,9 +61,11 @@ class ContractInstrumentation: Instrumentation() {
             check(selfieId == 4)
             try { capture.uploadBiometric(bytes,"frame.png",BiometricUploadType.GESTURE,challenge.challengeId,null,UUID.randomUUID()); error("Gesture frame without a gesture accepted") } catch(_: IllegalArgumentException) {}
             val results=challenge.gestures.map { GestureResult(it,true,"2026-11-20T23:04:00Z") }
-            check(capture.submitFacial(FacialSubmission(challenge.challengeId,selfieId,gestureIds.mapIndexed { index,_ -> 10+index },videoId,"mlkit",results,FaceDetectionSummary(true,1,true,true),"2026-11-20T23:04:10Z"),UUID.randomUUID()) == 1)
+            val facialKey=UUID.randomUUID()
+            check(capture.submitFacial(FacialSubmission(challenge.challengeId,selfieId,gestureIds.mapIndexed { index,_ -> 10+index },videoId,"mlkit",results,FaceDetectionSummary(true,1,true,true),"2026-11-20T23:04:10Z"),facialKey) == 1)
             val fix=LocationFix(4.0511,9.7679,12.5,null,"2026-11-20T23:04:00Z",true,"gps","2026-11-20T23:04:02Z")
-            check(capture.submitLocation(fix,UUID.randomUUID()) == 2)
+            val locationKey=UUID.randomUUID()
+            check(capture.submitLocation(fix,locationKey) == 2)
             val captureStats=JSONObject(URL(base.substringBefore("/api/v1")+"/stats").readText())
             check(captureStats.getInt("challengeRequests") == before.getInt("challengeRequests")+1)
             val all=captureStats.getJSONArray("biometrics")
@@ -76,6 +78,8 @@ class ContractInstrumentation: Instrumentation() {
             }
             uploads.getJSONObject(3).let { check(it.getString("type") == "liveness_video" && it.getString("content_type") == "video/mp4" && it.getString("capture_source") == "camera" && it.getString("challenge_id") == challenge.challengeId && it.isNull("gesture") && it.getString("key") == videoKey.toString()) }
             uploads.getJSONObject(4).let { check(it.getString("type") == "selfie" && it.getString("capture_source") == "camera" && it.getString("challenge_id") == challenge.challengeId && it.isNull("gesture") && !it.getJSONArray("fields").toString().contains("document_type_id") && it.getString("key") == selfieKey.toString()) }
+            val submits=captureStats.getJSONArray("submits")
+            check(submits.getJSONObject(submits.length()-2).getString("key") == facialKey.toString() && submits.getJSONObject(submits.length()-1).getString("key") == locationKey.toString()) { "Submit idempotency keys were not sent" }
             val facial=JSONObject(captureStats.getString("facialBody"))
             check(facial.getString("type") == "facial_verification" && facial.getString("challenge_id") == challenge.challengeId && facial.getInt("image_file_id") == selfieId && facial.getInt("video_file_id") == videoId)
             check(facial.getJSONArray("gesture_file_ids").toString() == "[10,11,12]")
@@ -87,9 +91,9 @@ class ContractInstrumentation: Instrumentation() {
             check(location.getString("type") == "location_verification" && location.getDouble("latitude") == 4.0511 && location.getDouble("longitude") == 9.7679)
             check(locationMetadata.getDouble("accuracy") == 12.5 && locationMetadata.isNull("altitude") && locationMetadata.getBoolean("is_mock") && locationMetadata.getString("provider") == "gps" && locationMetadata.getString("fix_time") == "2026-11-20T23:04:00Z" && locationMetadata.has("captured_at"))
             try { VerificationSession(descriptor("reject-location")).submitLocation(fix,UUID.randomUUID()); error("Location rejection was not surfaced") }
-            catch(error: CredflareException) { check(error.status == 422 && error.type == "validation" && error.message == "The location is not accurate enough. Move to an open area and try again.") { "Unexpected rejection ${error.status} ${error.message}" } }
+            catch(error: CredflareException) { check(error.status == 422 && error.type == "validation" && error.code == CredflareSpec.ErrorCode.LOCATION_ACCURACY && error.isKnownCode) { "Unexpected rejection ${error.status} ${error.code}" } }
             try { VerificationSession(descriptor("reject-place")).submitLocation(fix,UUID.randomUUID()); error("Place rejection was not surfaced") }
-            catch(error: CredflareException) { check(error.status == 422 && error.message == "Your location does not meet the place requirement for this verification.") }
+            catch(error: CredflareException) { check(error.status == 422 && error.code == CredflareSpec.ErrorCode.LOCATION_REFERENCE_NOT_MATCHED) }
             session.cancel()
             check(!descriptor().toString().contains("test-session-token"))
             try { SessionDescriptor(UUID.randomUUID(),"test-token","http://example.test","2030-01-01"); error("Unsafe URL accepted") } catch(_: IllegalArgumentException) {}

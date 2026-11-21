@@ -44,7 +44,20 @@ The engine checks that the camera saw the server's sequence in time. It does not
 2. The SDK requests `ACCESS_FINE_LOCATION` (with coarse, as Android 12 and newer require).
 3. It listens to the GPS and network providers of the platform `LocationManager` (no Play services). Each attempt lasts `fix_timeout_s`; up to `retry_attempts` attempts run until a fix has `accuracy <= max_accuracy_m` and is no older than `max_age_s`.
 4. The applicant sees the accuracy, coordinates and time, then sends. The payload carries `accuracy`, `altitude`, `fix_time`, `is_mock` (from `Location.isMock` on Android 12 and newer, `isFromMockProvider` before), `provider` (`gps`, `network` or `fused`) and `captured_at`.
-5. A `422` shows the server's reason with **Try again**. When the fix came from a mock provider and the profile rejects mock locations, the SDK shows `location.mock_detected`. When the server reports a place mismatch, the SDK shows `location.place.not_matched_within` or `not_matched_outside` with the place labels. The API has no error code for this case, so the SDK recognises the server's place mismatch message.
+5. A `422` carries a rejection `code` from the spec and the SDK chooses the copy from it, always with **Try again** and a new fix:
+
+   | Code | Copy |
+   | --- | --- |
+   | `location.reference_not_matched` | `location.place.not_matched_within` or `not_matched_outside` with the place labels |
+   | `location.mock` | `location.mock_detected` |
+   | `location.accuracy` | `location.low_accuracy`, or `location.place.not_precise` when a place is configured |
+   | any other code | The server's message |
+
+## Rejections and retries
+
+Each upload and submission sends an `X-Idempotency-Key`. A retry of the same request after a network failure reuses its key; a new capture, fix or document attempt gets a new key.
+
+A liveness upload or submission rejected with `liveness.challenge_expired`, `challenge_invalid`, `challenge_used` or `frame_out_of_window` shows `liveness.expired`; any other `422` shows the server's message. In both cases the capture is discarded and **Try again** requests a new challenge. Unknown codes are kept as raw strings on `CredflareException.code` and fall back to the server's message.
 
 ## Permissions
 

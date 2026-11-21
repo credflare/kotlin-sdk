@@ -23,7 +23,7 @@ Camera source is client reported. The liveness challenge shows that the camera r
 
 ## Session client
 
-`VerificationSession.get()`, `upload()`, `createLivenessChallenge()`, `uploadBiometric()`, `submit()`, `submitFacial()`, `submitLocation()`, `replaceSession()` and `cancel()` are blocking methods and must run off the main thread. Each upload and submission accepts a UUID retry key. Keep the same key with unchanged evidence after a network failure. A replacement session must use the same API; the host backend must bind renewal to the same case. A `422` raises `CredflareException` with the server's reason as its message.
+`VerificationSession.get()`, `upload()`, `createLivenessChallenge()`, `uploadBiometric()`, `submit()`, `submitFacial()`, `submitLocation()`, `replaceSession()` and `cancel()` are blocking methods and must run off the main thread. Each upload and submission accepts a UUID retry key. Keep the same key with unchanged evidence after a network failure. A replacement session must use the same API; the host backend must bind renewal to the same case. A `422` raises `CredflareException` with the server's reason as its message and the rejection code in `code`; compare it with the constants in `CredflareSpec.ErrorCode`. `isKnownCode` is false for codes newer than the generated spec.
 
 `SessionInfo.requirements` carries each outstanding verification requirement with its parsed settings: gestures, gesture count and video for facial checks; accuracy, age, mock location and IP country rules for location checks, and the reference rule with place labels (never coordinates).
 
