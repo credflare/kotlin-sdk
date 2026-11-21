@@ -10,7 +10,7 @@ Use JDK 17 and an Android SDK with API 36. Node 20 or newer runs the spec check 
 
 `:sdk:testDebugUnitTest` runs on the JVM:
 
-* `ContractServerTest` starts `scripts/contract-server.mjs` with Node and calls the real client against the spec fixtures. It asserts the idempotency key on every upload and submission and maps the rejection codes in the captured fixtures to the spec copy.
+* `ContractServerTest` starts `scripts/contract-server.mjs` with Node and calls the real client against the spec fixtures. It asserts the idempotency key on every upload and submission, and replays every backend rejection in `example/src/androidTest/assets/rejections` (one per code in the spec) through the client to check the parsed code and the copy the applicant sees.
 * `GestureEngineTest` replays every trace in `sdk/src/test/resources/liveness-traces` (copied from `sdk-spec/fixtures/liveness-traces`) and asserts the expected outcome and position status.
 * `SettingsParsingTest` parses requirement settings, reference place labels and liveness challenges from the captured API fixtures.
 
@@ -27,6 +27,7 @@ It runs the generator in check mode for `Spec.generated.kt` and compares the con
 ```sh
 node ../sdk-spec/scripts/generate.mjs --target kotlin --out sdk/src/main/kotlin/net/credflare/sdk/Spec.generated.kt
 cp ../sdk-spec/fixtures/*.json example/src/androidTest/assets/
+cp ../sdk-spec/fixtures/rejections/*.json example/src/androidTest/assets/rejections/
 cp ../sdk-spec/fixtures/liveness-traces/*.json sdk/src/test/resources/liveness-traces/
 ```
 

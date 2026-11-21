@@ -19,6 +19,8 @@ const server = createServer(async (req,res) => {
  const body=raw.toString('latin1');
  const send = async (status,fixture) => {res.writeHead(status,{'Content-Type':'application/json'});res.end(await readFile(join(fixtures,fixture+'.json')));};
  if (token === 'Bearer unauthorized') return send(401,'unauthorized');
+ const rejection = token?.match(/^Bearer reject:([a-z_.]+)$/)?.[1];
+ if (rejection && req.url.endsWith('/submit')) return send(422,'rejections/'+rejection);
  if (req.method==='DELETE') return send(200,'cancelled');
  if (req.url.endsWith('/liveness-challenges')) {challengeRequests++;return send(201,'liveness-challenge');}
  if (req.url.endsWith('/uploads/documents')) {uploadSource=body.includes('name="capture_source"\r\n\r\nupload')?'upload':'unknown';requestKey=req.headers['x-idempotency-key'];return send(201,'upload');}

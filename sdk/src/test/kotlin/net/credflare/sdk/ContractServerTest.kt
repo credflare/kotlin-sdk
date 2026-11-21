@@ -72,39 +72,47 @@ class ContractServerTest {
     }
 
     @Test
-    fun rejectionCodesFromTheRealFixturesMapToSpecCopy() {
-        val accuracy = rejection("reject-location", fix)
-        assertEquals(422, accuracy.status)
-        assertEquals(CredflareSpec.ErrorCode.LOCATION_ACCURACY, accuracy.code)
-        assertTrue(accuracy.isKnownCode)
-        assertEquals(SpecCopy.text(CredflareSpec.CopyKey.LOCATION_LOW_ACCURACY), Rejections.locationMessage(accuracy, null, "Acme"))
-
-        val place = rejection("reject-place", fix)
-        assertEquals(CredflareSpec.ErrorCode.LOCATION_REFERENCE_NOT_MATCHED, place.code)
-        assertEquals("You do not seem to be at Head office yet. Move closer, then try again.", Rejections.locationMessage(place, LocationReference("within", "any", listOf("Head office")), "Acme"))
-        assertEquals("You seem to be too close to Depot. Move away, then try again.", Rejections.locationMessage(place, LocationReference("outside", "all", listOf("Depot")), "Acme"))
-        assertEquals(SpecCopy.text(CredflareSpec.CopyKey.LOCATION_PLACE_NOT_PRECISE), Rejections.locationMessage(accuracy, LocationReference("within", "any", listOf("Head office")), "Acme"))
-    }
-
-    @Test
-    fun locationCodesWithoutCapturedFixturesMapToSpecCopy() {
-        fun error(code: String) = CredflareException(422, "Server reason", code = code)
-        assertEquals("Your location reading is out of date. Try again to take a new one.", Rejections.locationMessage(error(CredflareSpec.ErrorCode.LOCATION_STALE), null, "Acme"))
-        assertEquals(SpecCopy.text(CredflareSpec.CopyKey.LOCATION_IP_COUNTRY_MISMATCH), Rejections.locationMessage(error(CredflareSpec.ErrorCode.LOCATION_IP_COUNTRY), null, "Acme"))
-        assertEquals(SpecCopy.text(CredflareSpec.CopyKey.LOCATION_MOCK_DETECTED), Rejections.locationMessage(error(CredflareSpec.ErrorCode.LOCATION_MOCK), null, "Acme"))
-    }
-
-    @Test
-    fun challengeCodesAskForANewChallenge() {
-        fun error(code: String?) = CredflareException(422, "Server reason", code = code)
-        for(code in listOf("liveness.challenge_expired", "liveness.challenge_invalid", "liveness.challenge_used", "liveness.frame_out_of_window")) {
-            assertEquals(SpecCopy.text(CredflareSpec.CopyKey.LIVENESS_EXPIRED), Rejections.livenessMessage(error(code), "Acme"))
+    fun everyRejectionFixtureMapsItsCodeToApplicantCopy() {
+        val directory = File("../example/src/androidTest/assets/rejections")
+        val files = directory.listFiles { file -> file.name.endsWith(".json") }!!.sortedBy { it.name }
+        assertEquals(CredflareSpec.ErrorCode.MEANINGS.keys.sorted(), files.map { it.name.removeSuffix(".json") })
+        val place = LocationReference("within", "any", listOf("Head office"))
+        val copy = { key: String -> SpecCopy.text(key) }
+        val expected = mapOf(
+            CredflareSpec.ErrorCode.LOCATION_ACCURACY to copy(CredflareSpec.CopyKey.LOCATION_LOW_ACCURACY),
+            CredflareSpec.ErrorCode.LOCATION_STALE to copy(CredflareSpec.CopyKey.LOCATION_STALE),
+            CredflareSpec.ErrorCode.LOCATION_MOCK to copy(CredflareSpec.CopyKey.LOCATION_MOCK_DETECTED),
+            CredflareSpec.ErrorCode.LOCATION_IP_COUNTRY to copy(CredflareSpec.CopyKey.LOCATION_IP_COUNTRY_MISMATCH),
+            CredflareSpec.ErrorCode.LOCATION_REFERENCE_NOT_MATCHED to "You do not seem to be at Head office yet. Move closer, then try again.",
+            CredflareSpec.ErrorCode.LIVENESS_CHALLENGE_EXPIRED to copy(CredflareSpec.CopyKey.LIVENESS_EXPIRED),
+            CredflareSpec.ErrorCode.LIVENESS_CHALLENGE_INVALID to copy(CredflareSpec.CopyKey.LIVENESS_EXPIRED),
+            CredflareSpec.ErrorCode.LIVENESS_CHALLENGE_USED to copy(CredflareSpec.CopyKey.LIVENESS_EXPIRED),
+            CredflareSpec.ErrorCode.LIVENESS_FRAME_OUT_OF_WINDOW to copy(CredflareSpec.CopyKey.LIVENESS_EXPIRED),
+        )
+        val challengeId = UUID.randomUUID().toString()
+        for(file in files) {
+            val code = file.name.removeSuffix(".json")
+            val client = session("reject:$code")
+            val error = try {
+                if(code.startsWith("location.")) client.submitLocation(fix, UUID.randomUUID())
+                else client.submitFacial(FacialSubmission(challengeId, 1, listOf(2), 3, "mlkit", listOf(GestureResult("smile", true, "2026-11-21T00:40:00.000Z")), FaceDetectionSummary(true, 1, true, true), "2026-11-21T00:40:00.000Z"), UUID.randomUUID())
+                fail("$code was not rejected"); throw IllegalStateException()
+            } catch(error: CredflareException) { error }
+            assertEquals(code, 422, error.status)
+            assertEquals(code, code, error.code)
+            assertTrue(code, error.isKnownCode)
+            val serverMessage = JSONObject(file.readText()).getString("message")
+            assertEquals(code, serverMessage, error.message)
+            val shown = if(code.startsWith("location.")) Rejections.locationMessage(error, if(code == CredflareSpec.ErrorCode.LOCATION_REFERENCE_NOT_MATCHED) place else null, "Acme") else Rejections.livenessMessage(error, "Acme")
+            assertEquals(code, expected[code] ?: serverMessage, shown)
         }
-        assertEquals("Server reason", Rejections.livenessMessage(error("liveness.video_missing"), "Acme"))
-        val unknown = CredflareException.fromEnvelope(422, JSONObject("""{"success":false,"message":"New reason","errors":[],"code":"liveness.future_rule"}"""))
-        assertEquals("liveness.future_rule", unknown.code)
-        assertFalse(unknown.isKnownCode)
-        assertEquals("New reason", Rejections.locationMessage(unknown, null, "Acme"))
-        assertEquals(null, CredflareException.fromEnvelope(422, JSONObject("""{"success":false,"message":"x","errors":[]}""")).code)
+    }
+
+    @Test
+    fun accuracyWithAPlaceAsksForAPreciseFix() {
+        val error = try { session("reject:${CredflareSpec.ErrorCode.LOCATION_ACCURACY}").submitLocation(fix, UUID.randomUUID()); fail(); throw IllegalStateException() } catch(error: CredflareException) { error }
+        assertEquals(SpecCopy.text(CredflareSpec.CopyKey.LOCATION_PLACE_NOT_PRECISE), Rejections.locationMessage(error, LocationReference("within", "any", listOf("Head office")), "Acme"))
+        val outside = try { session("reject:${CredflareSpec.ErrorCode.LOCATION_REFERENCE_NOT_MATCHED}").submitLocation(fix, UUID.randomUUID()); fail(); throw IllegalStateException() } catch(error: CredflareException) { error }
+        assertEquals("You seem to be too close to Depot. Move away, then try again.", Rejections.locationMessage(outside, LocationReference("outside", "all", listOf("Depot")), "Acme"))
     }
 }
