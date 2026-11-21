@@ -58,6 +58,45 @@ class SettingsParsingTest {
     }
 
     @Test
+    fun parsesADocumentAndSelfieProfile() {
+        val info = SessionInfo.fromJson(fixture("combined-session.json"))
+        assertEquals("live", info.environment)
+        assertEquals("Brennon Krajcik's Workspace", info.requesterName)
+        assertEquals(10485760L, info.maxFileSizeBytes)
+        assertEquals(listOf("jpg", "png", "webp", "pdf"), info.allowedFileTypes)
+        val doc = info.documents.single()
+        assertEquals(DocumentRequirement(1, "SDK test document", "snapshot_or_upload", listOf(DocumentSide.FRONT, DocumentSide.BACK), null, "all_of", 1), doc)
+        assertEquals(listOf("camera_or_upload:front", "camera_or_upload:back"), doc.captureSteps().map { it.id })
+        assertEquals(SpecCopy.text(CredflareSpec.CopyKey.DOCUMENTS_METHOD_EITHER, "verifier" to SpecCopy.verifier(null)), doc.methodSummary)
+        assertEquals("facial_verification", info.nextRequirement!!.type)
+        assertEquals(FacialSettings.fromJson(null), info.nextRequirement!!.facial)
+        assertTrue(info.requiresFacial)
+        assertFalse(info.requiresLocation || info.hasForms || info.needsHostSteps)
+    }
+
+    @Test
+    fun documentStepsLeaveWhenTheDocumentIsReceived() {
+        val info = SessionInfo.fromJson(fixture("combined-after-document.json"))
+        assertTrue(info.documents.isEmpty())
+        assertEquals("facial_verification", info.nextRequirement!!.type)
+    }
+
+    @Test
+    fun completedProfileHasNothingLeft() {
+        val info = SessionInfo.fromJson(fixture("facial-complete.json"))
+        assertTrue(info.documents.isEmpty() && info.requirements.isEmpty())
+        assertNull(info.nextRequirement)
+        assertFalse(info.requiresFacial || info.needsHostSteps)
+    }
+
+    @Test
+    fun uploadOnlyDocumentHasOneStepPerSide() {
+        val doc = SessionInfo.fromJson(fixture("session.json")).documents.single()
+        assertEquals("upload", doc.policy)
+        assertEquals(listOf("upload:front", "upload:back"), doc.captureSteps().map { it.id })
+    }
+
+    @Test
     fun locationPayloadSendsNullForUnknownMockState() {
         val payload = LocationFix(4.05, 9.76, 12.5, null, "2026-11-20T10:00:00Z", null, "gps", "2026-11-20T10:00:01Z").json()
         assertEquals("location_verification", payload.getString("type"))

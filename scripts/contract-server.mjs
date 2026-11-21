@@ -4,12 +4,12 @@ import {join} from 'node:path';
 const fixtures = process.argv[2];
 let redirectHits = 0, uploadSource = '', requestKey = '', selfieBody = '', selfieUpload = '', selfieKey = '';
 let challengeRequests = 0, facialBody = '', locationBody = '';
-const biometrics = [], submits = [];
+const biometrics = [], submits = [], attempts = [], dropped = new Set();
 const trap = createServer((req,res) => { redirectHits++; res.end('{}'); }).listen(0,'127.0.0.1');
 const field = (body,name) => body.match(new RegExp(`name="${name}"\\r\\n\\r\\n([^\\r]*)`))?.[1] ?? null;
 const server = createServer(async (req,res) => {
  const token = req.headers.authorization;
- if (req.url === '/stats') {res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({redirectHits,uploadSource,requestKey,selfieBody,selfieUpload,selfieKey,challengeRequests,biometrics,submits,facialBody,locationBody}));}
+ if (req.url === '/stats') {res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({redirectHits,uploadSource,requestKey,selfieBody,selfieUpload,selfieKey,challengeRequests,biometrics,submits,attempts,facialBody,locationBody}));}
  if (token === 'Bearer redirect') {res.writeHead(302,{Location:`http://127.0.0.1:${trap.address().port}/`});return res.end();}
  if (token === 'Bearer slow') {return setTimeout(() => {res.writeHead(200);res.end('{}');},2000);}
  if (token === 'Bearer broken-body') {res.writeHead(200,{'Content-Type':'application/json','Content-Length':'100000'});res.flushHeaders();res.write('{"success":');return setTimeout(()=>res.destroy(),40);}
@@ -17,6 +17,11 @@ const server = createServer(async (req,res) => {
  const chunks=[];for await(const chunk of req)chunks.push(chunk);
  const raw=Buffer.concat(chunks);
  const body=raw.toString('latin1');
+ const key = req.headers['x-idempotency-key'];
+ if (token === 'Bearer flaky' && key) {
+  attempts.push({path:req.url.replace(/^.*\/sessions\/[^/]+/,''),key,type:req.url.endsWith('/submit')?JSON.parse(raw.toString('utf8')).type:field(body,'type')});
+  if (!dropped.has(key)) {dropped.add(key);return req.socket.destroy();}
+ }
  const send = async (status,fixture) => {res.writeHead(status,{'Content-Type':'application/json'});res.end(await readFile(join(fixtures,fixture+'.json')));};
  if (token === 'Bearer unauthorized') return send(401,'unauthorized');
  const rejection = token?.match(/^Bearer reject:([a-z_.]+)$/)?.[1];

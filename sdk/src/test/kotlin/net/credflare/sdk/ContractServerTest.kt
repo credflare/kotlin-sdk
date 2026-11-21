@@ -10,31 +10,22 @@ import org.junit.Assert.fail
 import org.junit.BeforeClass
 import org.junit.Test
 import java.io.File
-import java.net.URL
 import java.util.UUID
 
 class ContractServerTest {
     companion object {
-        private var server: Process? = null
-        private var root = ""
+        private lateinit var server: ContractServer
         private val sessionId = UUID.randomUUID()
 
         @JvmStatic @BeforeClass
-        fun start() {
-            val repo = File("..").canonicalFile
-            val process = ProcessBuilder("node", File(repo, "scripts/contract-server.mjs").path, File(repo, "example/src/androidTest/assets").path)
-                .apply { environment()["PORT"] = "0" }.redirectErrorStream(true).start()
-            server = process
-            val port = process.inputStream.bufferedReader().readLine()?.trim()?.toIntOrNull() ?: error("The contract server did not start")
-            root = "http://127.0.0.1:$port"
-        }
+        fun start() { server = ContractServer() }
 
         @JvmStatic @AfterClass
-        fun stop() { server?.destroy() }
+        fun stop() { server.close() }
     }
 
-    private fun session(token: String) = VerificationSession(SessionDescriptor(sessionId, token, "$root/api/v1", "2030-01-01T00:00:00Z"))
-    private fun stats() = JSONObject(URL("$root/stats").readText())
+    private fun session(token: String) = server.session(token, sessionId)
+    private fun stats() = server.stats()
     private fun last(array: JSONArray, count: Int) = (array.length() - count until array.length()).map { array.getJSONObject(it) }
     private fun rejection(token: String, fix: LocationFix): CredflareException {
         try { session(token).submitLocation(fix, UUID.randomUUID()) } catch(error: CredflareException) { return error }
