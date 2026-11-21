@@ -12,7 +12,10 @@ Use JDK 17 and an Android SDK with API 36. Node 20 or newer runs the spec check 
 
 * `ContractServerTest` starts `scripts/contract-server.mjs` with Node and calls the real client against the spec fixtures. It asserts the idempotency key on every upload and submission, and replays every backend rejection in `example/src/androidTest/assets/rejections` (one per code in the spec) through the client to check the parsed code and the copy the applicant sees.
 * `GestureEngineTest` replays every trace in `sdk/src/test/resources/liveness-traces` (copied from `sdk-spec/fixtures/liveness-traces`) and asserts the expected outcome and position status.
-* `SettingsParsingTest` parses requirement settings, reference place labels and liveness challenges from the captured API fixtures.
+* `SettingsParsingTest` parses sessions, document requirements and their capture steps, requirement settings, reference place labels and liveness challenges from the captured API fixtures.
+* `RejectionCopyTest` parses every file in `example/src/androidTest/assets/rejections` and checks the copy the applicant sees for each code, with no place, an unnamed place, places to be at and places to stay away from.
+* `LocationAcceptanceTest` checks the accuracy and age limits from the captured profile and the spec defaults, and that mock and unknown mock readings are sent to the server, which applies the `mock_location` policy.
+* `AttemptKeysTest` runs the document, liveness and location submissions against the contract server with every first response dropped. A retry reuses the idempotency key of each upload and submission and skips finished uploads; a new location fix, a changed document file or a liveness rejection starts a new attempt with new keys.
 
 ## Spec drift
 
@@ -34,6 +37,8 @@ cp ../sdk-spec/fixtures/liveness-traces/*.json sdk/src/test/resources/liveness-t
 `cancelled.json`, `capture-snapshot-or-upload.json`, `capture-snapshot_and_upload.json` and `sample-front.png` are local to this repository.
 
 ## Contract suite on a device
+
+CI runs this suite on an API 35 emulator with `./scripts/run-contract-instrumentation.sh`, which starts the contract server, installs both APKs, runs the instrumentation and fails unless it reports `PASS`. The manual steps are:
 
 The instrumentation calls the real client against `scripts/contract-server.mjs`, which serves the spec fixtures and records what the client sent. It covers sessions, document uploads, requirement settings, the liveness challenge, gesture, video and selfie uploads with their multipart fields and idempotency keys, facial and location submissions with their idempotency keys, `422` location rejections with their codes, and a real `422` for every spec rejection code.
 
