@@ -17,19 +17,19 @@ class LocationCaptureException(val copyKey: String, val best: Location? = null):
 internal object LocationCapture {
     fun ageSeconds(location: Location) = (SystemClock.elapsedRealtimeNanos() - location.elapsedRealtimeNanos) / 1_000_000_000.0
 
-    fun acceptable(location: Location, settings: LocationSettings) =
-        location.hasAccuracy() && location.accuracy <= settings.maxAccuracyM && ageSeconds(location) <= settings.maxAgeS
+    fun fresh(hasAccuracy: Boolean, ageS: Double, settings: LocationSettings) = hasAccuracy && ageS <= settings.maxAgeS
+    fun acceptable(hasAccuracy: Boolean, accuracyM: Float, ageS: Double, settings: LocationSettings) = fresh(hasAccuracy, ageS, settings) && accuracyM <= settings.maxAccuracyM
+    fun acceptable(location: Location, settings: LocationSettings) = acceptable(location.hasAccuracy(), location.accuracy, ageSeconds(location), settings)
 
     @Suppress("DEPRECATION")
     fun isMock(location: Location): Boolean? = if(Build.VERSION.SDK_INT >= 31) location.isMock else location.isFromMockProvider
 
-    fun toFix(location: Location): LocationFix = LocationFix(
-        location.latitude, location.longitude, location.accuracy.toDouble(),
-        if(location.hasAltitude()) location.altitude else null,
-        IsoTime.format(location.time),
-        isMock(location),
-        location.provider?.takeIf { it in listOf("gps", "network", "fused") },
-        IsoTime.now())
+    fun toFix(location: Location): LocationFix =
+        fix(location.latitude, location.longitude, location.accuracy, if(location.hasAltitude()) location.altitude else null, location.time, isMock(location), location.provider)
+
+    fun fix(latitude: Double, longitude: Double, accuracyM: Float, altitude: Double?, timeMillis: Long, isMock: Boolean?, provider: String?, capturedAt: String = IsoTime.now()) = LocationFix(
+        latitude, longitude, accuracyM.toDouble(), altitude, IsoTime.format(timeMillis), isMock,
+        provider?.takeIf { it in listOf("gps", "network", "fused") }, capturedAt)
 
     @SuppressLint("MissingPermission")
     fun acquire(context: Context, settings: LocationSettings, onAttempt: (Int) -> Unit): Location {
@@ -38,7 +38,7 @@ internal object LocationCapture {
         if(providers.isEmpty()) throw LocationCaptureException(CredflareSpec.CopyKey.LOCATION_UNAVAILABLE)
         var best: Location? = null
         fun consider(location: Location?) {
-            if(location == null || !location.hasAccuracy() || ageSeconds(location) > settings.maxAgeS) return
+            if(location == null || !fresh(location.hasAccuracy(), ageSeconds(location), settings)) return
             if(best == null || location.accuracy < best!!.accuracy) best = location
         }
         providers.forEach { consider(runCatching { manager.getLastKnownLocation(it) }.getOrNull()) }

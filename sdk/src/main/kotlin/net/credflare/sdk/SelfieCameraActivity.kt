@@ -50,6 +50,16 @@ class LivenessCapture(
     internal val selfieKey = UUID.randomUUID()
     internal var selfieId: Int? = null
     internal val submitKey = UUID.randomUUID()
+
+    internal fun send(client: VerificationSession): Int {
+        val id = challenge.challengeId
+        gestureFrames.forEachIndexed { index, bytes ->
+            if(gestureIds[index] == null) gestureIds[index] = client.uploadBiometric(bytes, "${challenge.gestures[index]}.jpg", BiometricUploadType.GESTURE, id, challenge.gestures[index], gestureKeys[index])
+        }
+        if(video != null && videoId == null) videoId = client.uploadBiometric(video.readBytes(), "liveness.mp4", BiometricUploadType.LIVENESS_VIDEO, id, key = videoKey)
+        if(selfieId == null) selfieId = client.uploadBiometric(selfie, "selfie.jpg", BiometricUploadType.SELFIE, id, key = selfieKey)
+        return client.submitFacial(FacialSubmission(id, selfieId!!, gestureIds.map { it!! }, videoId, provider, results, faceDetection, capturedAt), submitKey)
+    }
 }
 
 private class AspectFrame(context: Context): FrameLayout(context) {

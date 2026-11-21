@@ -189,7 +189,7 @@ class VerificationActivity: Activity() {
             }
             val subtitle = if(doc.supported) doc.methodSummary else copy(Key.DOCUMENTS_UNAVAILABLE)
             add(ui.card(doc.name, subtitle, if(doc.sides.size > 1) CredflareSpec.Icons.ID_CARD else CredflareSpec.Icons.DOCUMENT, doc.supported) {
-                current.document = doc; current.index = 0; current.captures.clear(); current.submitKey = UUID.randomUUID(); current.error = null; render()
+                current.selectDocument(doc); render()
             }, T.SPACING_MD)
         }
         val inApp = info.requirements.filter { it.collectedInApp }.map { it.facial != null }.distinct()
@@ -222,13 +222,7 @@ class VerificationActivity: Activity() {
                 button(copy(Key.REVIEW_CHANGE), primary = false) { current.index = index; current.editing = true; render() }
             }
             button(copy(Key.REVIEW_SEND)) { work(copy(Key.SENDING_UPLOADING), Key.ERRORS_SEND_DOCUMENT_FAILED, {
-                val evidence = steps.mapIndexed { index, step ->
-                    val file = current.captures[step.id]!!
-                    current.busyMessage = copy(Key.SENDING_UPLOADING_PROGRESS, "current" to index + 1, "total" to steps.size); current.changed?.invoke()
-                    if(file.fileId == null) file.fileId = current.client!!.upload(file.bytes, file.name, file.source, step.side, doc.id, file.key)
-                    Evidence(file.fileId!!, file.source, step.side)
-                }
-                current.client!!.submit(doc.id, evidence, current.submitKey)
+                current.sendDocument(doc, steps) { index -> current.busyMessage = copy(Key.SENDING_UPLOADING_PROGRESS, "current" to index + 1, "total" to steps.size); current.changed?.invoke() }
                 current.received += copy(Key.RECEIPT_DOCUMENT, "document" to doc.name)
                 current.captures.clear(); current.document = null
                 refresh(current)
@@ -277,7 +271,6 @@ class VerificationActivity: Activity() {
         small(copy(Key.SELFIE_PRIVACY))
     }
 
-    private fun discardLiveness(current: CredflareVerification.Launch) { current.liveness?.video?.delete(); current.liveness = null; current.challenge = null }
 
     private fun startLiveness(current: CredflareVerification.Launch) {
         if(checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) { requestPermissions(arrayOf(Manifest.permission.CAMERA), 104); return }
@@ -291,23 +284,8 @@ class VerificationActivity: Activity() {
     private fun sendLiveness(current: CredflareVerification.Launch) {
         val capture = current.liveness ?: return
         work(copy(Key.LIVENESS_SENDING), Key.ERRORS_SEND_SELFIE_FAILED, {
-            try {
-                val client = current.client!!
-                val id = capture.challenge.challengeId
-                capture.gestureFrames.forEachIndexed { index, bytes ->
-                    if(capture.gestureIds[index] == null) capture.gestureIds[index] = client.uploadBiometric(bytes, "${capture.challenge.gestures[index]}.jpg", BiometricUploadType.GESTURE, id, capture.challenge.gestures[index], capture.gestureKeys[index])
-                }
-                val video = capture.video
-                if(video != null && capture.videoId == null) capture.videoId = client.uploadBiometric(video.readBytes(), "liveness.mp4", BiometricUploadType.LIVENESS_VIDEO, id, key = capture.videoKey)
-                if(capture.selfieId == null) capture.selfieId = client.uploadBiometric(capture.selfie, "selfie.jpg", BiometricUploadType.SELFIE, id, key = capture.selfieKey)
-                client.submitFacial(FacialSubmission(id, capture.selfieId!!, capture.gestureIds.map { it!! }, capture.videoId, capture.provider, capture.results, capture.faceDetection, capture.capturedAt), capture.submitKey)
-            } catch(error: CredflareException) {
-                if(error.status != 422) throw error
-                discardLiveness(current)
-                throw IllegalArgumentException(Rejections.livenessMessage(error, verifier))
-            }
+            current.sendLiveness(capture, verifier)
             current.received += copy(Key.RECEIPT_SELFIE)
-            discardLiveness(current)
             refresh(current)
         })
     }
@@ -349,7 +327,7 @@ class VerificationActivity: Activity() {
         work(copy(Key.LOCATION_WAITING), Key.LOCATION_UNAVAILABLE, {
             try {
                 val location = LocationCapture.acquire(applicationContext, settings) { attempt -> if(attempt > 1) { current.busyMessage = copy(Key.LOCATION_WAITING_ACCURACY); current.changed?.invoke() } }
-                current.locationFix = LocationCapture.toFix(location); current.locationKey = UUID.randomUUID()
+                current.acceptLocation(LocationCapture.toFix(location))
             } catch(error: Exception) { current.locationFailures += 1; throw error }
         })
     }
@@ -357,14 +335,8 @@ class VerificationActivity: Activity() {
     private fun sendLocation(current: CredflareVerification.Launch, settings: LocationSettings) {
         val fix = current.locationFix ?: return
         work(copy(Key.SENDING_SENDING), Key.ERRORS_SEND_LOCATION_FAILED, {
-            try { current.client!!.submitLocation(fix, current.locationKey) }
-            catch(error: CredflareException) {
-                if(error.status != 422) throw error
-                current.locationFix = null; current.locationFailures += 1
-                throw IllegalArgumentException(Rejections.locationMessage(error, settings.reference, verifier))
-            }
+            current.sendLocation(fix, settings.reference, verifier)
             current.received += copy(Key.RECEIPT_LOCATION)
-            current.locationFix = null
             refresh(current)
         })
     }
@@ -466,8 +438,7 @@ class VerificationActivity: Activity() {
             require(ext in info.allowedFileTypes) { if(requestCode == 101) copy(Key.ERRORS_PHOTO_FORMAT) else copy(Key.ERRORS_FILE_TYPE, "types" to info.allowedFileTypes.joinToString(", ") { it.uppercase() }) }
             if(requestCode == 101) require(decodePreview(bytes) != null) { copy(Key.ERRORS_CAMERA_NO_PHOTO) }
             val step = current.document!!.captureSteps()[current.index]
-            current.captures[step.id] = CredflareVerification.SelectedFile(bytes, name, if(requestCode == 101) CaptureSource.CAMERA else CaptureSource.UPLOAD)
-            current.submitKey = UUID.randomUUID()
+            current.addCapture(step, CredflareVerification.SelectedFile(bytes, name, if(requestCode == 101) CaptureSource.CAMERA else CaptureSource.UPLOAD))
             if(requestCode == 101) { photoFile?.delete(); photoUri?.let { revokeUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }; photoUri = null; photoFile = null }
         })
     }
