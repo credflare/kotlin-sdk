@@ -1,5 +1,5 @@
 // GENERATED FILE, DO NOT EDIT.
-// Source: credflare sdk-spec 1.0.0 (13c02ea43d7a). Regenerate with scripts/generate.mjs.
+// Source: credflare sdk-spec 1.0.0 (ef15c85fc748). Regenerate with scripts/generate.mjs.
 @file:Suppress("unused", "MemberVisibilityCanBePrivate")
 
 package net.credflare.sdk
@@ -62,7 +62,7 @@ data class SpecIcon(
 
 object CredflareSpec {
     const val VERSION: String = "1.0.0"
-    const val HASH: String = "13c02ea43d7a"
+    const val HASH: String = "ef15c85fc748"
 
     object Liveness {
         const val VERSION: Int = 1
@@ -547,6 +547,8 @@ object CredflareSpec {
             "location.timeout" to "We could not find your location in time. Try again.",
             "location.low_accuracy" to "Your location is not accurate enough yet. Move near a window or outside, then try again.",
             "location.mock_detected" to "An app or setting is changing your device location. Turn it off, then try again.",
+            "location.stale" to "Your location reading is out of date. Try again to take a new one.",
+            "location.ip_country_mismatch" to "Your internet connection seems to be in a different country from your location. Turn off any VPN or proxy, then try again.",
             "location.retry" to "Try again",
             "location.retries_exhausted" to "We could not get your location. Contact {verifier}.",
             "location.place.title_within" to "Share your location at {place}",
@@ -731,6 +733,8 @@ object CredflareSpec {
         const val LOCATION_TIMEOUT: String = "location.timeout"
         const val LOCATION_LOW_ACCURACY: String = "location.low_accuracy"
         const val LOCATION_MOCK_DETECTED: String = "location.mock_detected"
+        const val LOCATION_STALE: String = "location.stale"
+        const val LOCATION_IP_COUNTRY_MISMATCH: String = "location.ip_country_mismatch"
         const val LOCATION_RETRY: String = "location.retry"
         const val LOCATION_RETRIES_EXHAUSTED: String = "location.retries_exhausted"
         const val LOCATION_PLACE_TITLE_WITHIN: String = "location.place.title_within"

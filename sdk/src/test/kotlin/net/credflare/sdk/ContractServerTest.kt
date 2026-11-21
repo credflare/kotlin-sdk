@@ -83,6 +83,15 @@ class ContractServerTest {
         assertEquals(CredflareSpec.ErrorCode.LOCATION_REFERENCE_NOT_MATCHED, place.code)
         assertEquals("You do not seem to be at Head office yet. Move closer, then try again.", Rejections.locationMessage(place, LocationReference("within", "any", listOf("Head office")), "Acme"))
         assertEquals("You seem to be too close to Depot. Move away, then try again.", Rejections.locationMessage(place, LocationReference("outside", "all", listOf("Depot")), "Acme"))
+        assertEquals(SpecCopy.text(CredflareSpec.CopyKey.LOCATION_PLACE_NOT_PRECISE), Rejections.locationMessage(accuracy, LocationReference("within", "any", listOf("Head office")), "Acme"))
+    }
+
+    @Test
+    fun locationCodesWithoutCapturedFixturesMapToSpecCopy() {
+        fun error(code: String) = CredflareException(422, "Server reason", code = code)
+        assertEquals("Your location reading is out of date. Try again to take a new one.", Rejections.locationMessage(error(CredflareSpec.ErrorCode.LOCATION_STALE), null, "Acme"))
+        assertEquals(SpecCopy.text(CredflareSpec.CopyKey.LOCATION_IP_COUNTRY_MISMATCH), Rejections.locationMessage(error(CredflareSpec.ErrorCode.LOCATION_IP_COUNTRY), null, "Acme"))
+        assertEquals(SpecCopy.text(CredflareSpec.CopyKey.LOCATION_MOCK_DETECTED), Rejections.locationMessage(error(CredflareSpec.ErrorCode.LOCATION_MOCK), null, "Acme"))
     }
 
     @Test

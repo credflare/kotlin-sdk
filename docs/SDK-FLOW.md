@@ -51,6 +51,8 @@ The engine checks that the camera saw the server's sequence in time. It does not
    | `location.reference_not_matched` | `location.place.not_matched_within` or `not_matched_outside` with the place labels |
    | `location.mock` | `location.mock_detected` |
    | `location.accuracy` | `location.low_accuracy`, or `location.place.not_precise` when a place is configured |
+   | `location.stale` | `location.stale` |
+   | `location.ip_country` | `location.ip_country_mismatch` |
    | any other code | The server's message |
 
 ## Rejections and retries

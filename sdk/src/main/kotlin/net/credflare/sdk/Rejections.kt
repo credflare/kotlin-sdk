@@ -15,6 +15,8 @@ internal object Rejections {
             else SpecCopy.text(Key.LOCATION_PLACE_REJECTED, "verifier" to verifier)
         Code.LOCATION_MOCK -> SpecCopy.text(Key.LOCATION_MOCK_DETECTED)
         Code.LOCATION_ACCURACY -> SpecCopy.text(if(reference != null) Key.LOCATION_PLACE_NOT_PRECISE else Key.LOCATION_LOW_ACCURACY)
+        Code.LOCATION_STALE -> SpecCopy.text(Key.LOCATION_STALE)
+        Code.LOCATION_IP_COUNTRY -> SpecCopy.text(Key.LOCATION_IP_COUNTRY_MISMATCH)
         else -> error.message.orEmpty()
     }
 }
