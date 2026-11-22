@@ -102,14 +102,33 @@ class ContractInstrumentation: Instrumentation() {
                 val client=VerificationSession(descriptor("reject:$code"))
                 try {
                     if(code.startsWith("location.")) client.submitLocation(fix,UUID.randomUUID())
+                    else if(code.startsWith("email.") || code.startsWith("phone.")) client.confirmCode(code.substringBefore('.'),"123456")
                     else client.submitFacial(FacialSubmission(challenge.challengeId,1,listOf(2),3,"mlkit",results,FaceDetectionSummary(true,1,true,true),"2026-11-20T23:04:10Z"),UUID.randomUUID())
                     error("$code was not rejected")
-                } catch(error: CredflareException) { check(error.status == 422 && error.code == code && error.isKnownCode && error.message == message) { "Unexpected rejection for $code: ${error.code}" } }
+                } catch(error: CredflareException) {
+                    check(error.status == 422 && error.code == code && error.isKnownCode && error.message == message) { "Unexpected rejection for $code: ${error.code}" }
+                    val screen=Rejections.screen(error,null,"Acme")
+                    check(screen.action == CredflareSpec.Rejection.CODES.getValue(code).action && screen.title != null && !screen.message.contains("{")) { "Unexpected screen for $code" }
+                }
             }
+            val codes=VerificationSession(descriptor("codes"))
+            val sent=codes.requestCode("phone","+237650000001")
+            check(sent.channel == "phone" && sent.destination == "+237*******01" && sent.sendsRemaining == 4 && sent.resendDelayMillis == 60000L) { "Unexpected code request $sent" }
+            check(codes.confirmCode("email","123456") == 1)
+            val codeStats=JSONObject(URL(base.substringBefore("/api/v1")+"/stats").readText()).getJSONArray("codes")
+            check(codeStats.getJSONObject(codeStats.length()-2).getJSONObject("body").getString("phone") == "+237650000001" && codeStats.getJSONObject(codeStats.length()-1).getJSONObject("body").getString("code") == "123456")
+            val form=VerificationSession(descriptor("questionnaire"))
+            val formInfo=form.get()
+            check(formInfo.asksQuestions && formInfo.questionnaire.questions.size == 10)
+            val answers=mapOf<String,Any?>("country" to "DE","employment" to "Student","employer" to "Shop","birth_date" to "1990-05-17","terms" to true)
+            check(formInfo.questionnaire.errors(answers).isEmpty() && !formInfo.questionnaire.fields(answers).has("employer"))
+            check(form.submitAnswers(formInfo.questionnaire.fields(answers),UUID.randomUUID()) == 2)
+            val added=form.get()
+            check(added.outstanding && !added.asksQuestions && added.nextRequirement?.channel == "phone") { "Added requirement was not picked up" }
             session.cancel()
             check(!descriptor().toString().contains("test-session-token"))
             try { SessionDescriptor(UUID.randomUUID(),"test-token","http://example.test","2030-01-01"); error("Unsafe URL accepted") } catch(_: IllegalArgumentException) {}
-            output.putString(REPORT_KEY_STREAMRESULT,"PASS: native HTTP contract, capture rules, authentication, timeout, interrupted body, redirects, requirement settings, liveness challenge, gesture, video and selfie uploads, facial and location submissions, location rejections, every spec rejection code, upload metadata and credential redaction")
+            output.putString(REPORT_KEY_STREAMRESULT,"PASS: native HTTP contract, capture rules, authentication, timeout, interrupted body, redirects, requirement settings, liveness challenge, gesture, video and selfie uploads, facial and location submissions, location rejections, every spec rejection code and its screen, email and phone codes, questionnaire answers and the requirement added after them, upload metadata and credential redaction")
             finish(Activity.RESULT_OK,output)
         } catch(error: Throwable) {
             output.putString(REPORT_KEY_STREAMRESULT,"FAIL: ${error.javaClass.simpleName}: ${error.message}")

@@ -53,6 +53,7 @@ class VerificationActivity: Activity() {
     override fun onBackPressed() { closeRequested() }
     override fun onDestroy() {
         super.onDestroy()
+        ticker.removeCallbacksAndMessages(null)
         executor.shutdown()
         if(flow?.changed === changed) flow?.changed = null
         if(isFinishing) {
@@ -71,7 +72,7 @@ class VerificationActivity: Activity() {
         val current = flow ?: return finish()
         if(current.busy) return
         val info = current.info
-        if(info != null && !current.pendingReceipt && info.documents.isEmpty() && info.nextRequirement == null) { result(if(info.needsHostSteps) VerificationResult.HOST_ACTION_REQUIRED else VerificationResult.SUBMITTED); return }
+        if(info != null && !current.pendingReceipt && current.rejection == null && (!info.isOpen || info.documents.isEmpty()) && !info.asksQuestions && info.nextRequirement == null) { result(if(info.needsHostSteps) VerificationResult.HOST_ACTION_REQUIRED else VerificationResult.SUBMITTED); return }
         AlertDialog.Builder(this).setTitle(copy(Key.EXIT_TITLE)).setMessage(copy(Key.EXIT_BODY))
             .setNegativeButton(copy(Key.EXIT_STAY), null).setPositiveButton(copy(Key.EXIT_LEAVE)) { _, _ -> result(VerificationResult.CANCELLED) }.show()
     }
@@ -93,6 +94,8 @@ class VerificationActivity: Activity() {
         executor.execute {
             var ok = false
             try { task(); ok = true }
+            catch(error: CredflareVerification.Rejected) { current.rejection = error.screen }
+            catch(error: CredflareVerification.RefreshFailed) { current.error = copy(Key.ERRORS_REFRESH_FAILED) }
             catch(error: Exception) { current.error = describe(error, failure) }
             finally { current.busy = false; current.busyMessage = null; current.changed?.invoke() }
             if(ok && then != null) runOnUiThread { if(!isFinishing) then() }
@@ -107,9 +110,9 @@ class VerificationActivity: Activity() {
         else -> copy(failure)
     }
     private fun start(current: CredflareVerification.Launch) = work(copy(Key.INTRO_CHECKING), Key.ERRORS_START_FAILED, { current.client = VerificationSession(current.provider.createSession()); current.info = current.client!!.get() })
-    private fun refresh(current: CredflareVerification.Launch) { current.pendingReceipt = true; current.info = current.client!!.get(); current.pendingReceipt = false }
 
     private fun render() {
+        ticker.removeCallbacksAndMessages(null)
         val scroll = ScrollView(this).apply { setBackgroundColor(ui.color(ui.palette.surface)); isFillViewport = true }
         page = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
@@ -133,15 +136,18 @@ class VerificationActivity: Activity() {
             }
             current.pendingReceipt -> {
                 icon(CredflareSpec.Icons.RECEIVED); title(copy(Key.SENDING_SENT_TITLE)); body(copy(Key.SENDING_SENT_BODY))
-                button(copy(Key.SENDING_CHECK_AGAIN)) { work(copy(Key.INTRO_CHECKING), Key.ERRORS_REFRESH_FAILED, { refresh(current) }) }
+                button(copy(Key.COMMON_TRY_AGAIN)) { work(copy(Key.INTRO_CHECKING), Key.ERRORS_REFRESH_FAILED, { current.refresh() }) }
             }
-            info.documents.isNotEmpty() && current.document != null -> capture(current)
-            info.documents.isNotEmpty() -> documents(current, info)
+            current.rejection != null -> rejection(current, current.rejection!!)
+            info.isOpen && info.documents.isNotEmpty() && current.document != null -> capture(current)
+            info.isOpen && info.documents.isNotEmpty() -> documents(current, info)
+            info.asksQuestions -> questions(current, info.questionnaire)
             info.nextRequirement?.facial != null -> facial(current, info.nextRequirement!!.facial!!)
             info.nextRequirement?.location != null -> location(current, info.nextRequirement!!.location!!)
+            info.nextRequirement?.channel != null -> contact(current, info.nextRequirement!!.channel!!)
             else -> receipt(current, info)
         }
-        current.error?.let { showError(it) }
+        if(current.rejection == null) current.error?.let { showError(it) }
         footer()
     }
 
@@ -192,7 +198,7 @@ class VerificationActivity: Activity() {
                 current.selectDocument(doc); render()
             }, T.SPACING_MD)
         }
-        val inApp = info.requirements.filter { it.collectedInApp }.map { it.facial != null }.distinct()
+        val inApp = info.requirements.filter { it.facial != null || it.location != null }.map { it.facial != null }.distinct()
         val next = when(inApp) {
             listOf(true) -> Key.DOCUMENTS_SELFIE_NEXT
             listOf(false) -> Key.DOCUMENTS_LOCATION_NEXT
@@ -225,7 +231,7 @@ class VerificationActivity: Activity() {
                 current.sendDocument(doc, steps) { index -> current.busyMessage = copy(Key.SENDING_UPLOADING_PROGRESS, "current" to index + 1, "total" to steps.size); current.changed?.invoke() }
                 current.received += copy(Key.RECEIPT_DOCUMENT, "document" to doc.name)
                 current.captures.clear(); current.document = null
-                refresh(current)
+                current.refresh()
             }) }
             return
         }
@@ -286,7 +292,7 @@ class VerificationActivity: Activity() {
         work(copy(Key.LIVENESS_SENDING), Key.ERRORS_SEND_SELFIE_FAILED, {
             current.sendLiveness(capture, verifier)
             current.received += copy(Key.RECEIPT_SELFIE)
-            refresh(current)
+            current.refresh()
         })
     }
 
@@ -337,8 +343,207 @@ class VerificationActivity: Activity() {
         work(copy(Key.SENDING_SENDING), Key.ERRORS_SEND_LOCATION_FAILED, {
             current.sendLocation(fix, settings.reference, verifier)
             current.received += copy(Key.RECEIPT_LOCATION)
-            refresh(current)
+            current.refresh()
         })
+    }
+
+    private fun rejection(current: CredflareVerification.Launch, screen: RejectionScreen) {
+        icon(CredflareSpec.Icons.ERROR)
+        screen.title?.let { title(it) }
+        add(ui.text(screen.message, T.TYPE_BODY, ui.palette.ink).apply { accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE })
+        small(screen.requestedBy)
+        if(screen.action == "leave") helpLine(screen, muted = false)
+        button(screen.actionLabel) {
+            current.rejection = null; current.error = null
+            val channel = current.info?.nextRequirement?.channel
+            when(screen.action) {
+                "restart" -> if(current.info?.nextRequirement?.facial != null) startLiveness(current) else render()
+                "reenter_code" -> { current.codeDraft = ""; render() }
+                "new_code" -> {
+                    val destination = channel?.let { current.destinations[it] }
+                    if(channel != null && destination != null) sendCode(current, channel, destination) else render()
+                }
+                "leave" -> result(VerificationResult.HOST_ACTION_REQUIRED)
+                else -> render()
+            }
+        }
+        if(screen.action != "leave") helpLine(screen, muted = true)
+    }
+
+    private fun helpLine(screen: RejectionScreen, muted: Boolean) {
+        val view = add(ui.text("", if(muted) T.TYPE_SMALL else T.TYPE_BODY, if(muted) ui.palette.muted else ui.palette.ink)) as TextView
+        val text = android.text.SpannableString(screen.help)
+        val start = screen.helpLinkText?.let { screen.help.indexOf(it) } ?: -1
+        if(start >= 0 && screen.helpLink != null) {
+            text.setSpan(object: android.text.style.ClickableSpan() {
+                override fun onClick(widget: View) { try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(screen.helpLink))) } catch(_: Exception) {} }
+                override fun updateDrawState(ds: android.text.TextPaint) { super.updateDrawState(ds); ds.color = ui.color(ui.palette.primary) }
+            }, start, start + screen.helpLinkText!!.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            view.movementMethod = android.text.method.LinkMovementMethod.getInstance()
+        }
+        view.text = text
+    }
+
+    private fun choiceTint() = android.content.res.ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(ui.color(ui.palette.accent), ui.color(ui.palette.muted)))
+    private fun field() = EditText(this).apply { setTextColor(ui.color(ui.palette.ink)); setHintTextColor(ui.color(ui.palette.muted)); backgroundTintList = android.content.res.ColorStateList.valueOf(ui.color(ui.palette.border)) }
+    private var focusKey: String? = null
+    private fun questions(current: CredflareVerification.Launch, questionnaire: Questionnaire) {
+        title(copy(Key.QUESTIONS_TITLE)); body(copy(Key.QUESTIONS_BODY))
+        val shown = questionnaire.visible(current.answers)
+        val keys = shown.map { it.key }
+        fun changed(key: String, value: Any?) {
+            current.answers[key] = value
+            current.answerErrors = current.answerErrors - key
+            if(questionnaire.visible(current.answers).map { it.key } != keys) { focusKey = key; page.post { render() } }
+        }
+        var focus: View? = null
+        for(question in shown) {
+            val label = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            if(question.type != "consent") label.addView(ui.text(question.label, T.TYPE_LABEL).apply { gravity = Gravity.START; textAlignment = View.TEXT_ALIGNMENT_VIEW_START })
+            if(!question.required) label.addView(ui.text(copy(Key.QUESTIONS_OPTIONAL), T.TYPE_SMALL, ui.palette.muted).apply { gravity = Gravity.START; textAlignment = View.TEXT_ALIGNMENT_VIEW_START })
+            add(label, T.SPACING_LG)
+            val value = current.answers[question.key]
+            val input: View = when(question.type) {
+                "single_select", "select" -> RadioGroup(this).apply {
+                    question.options.forEach { option -> addView(RadioButton(this@VerificationActivity).apply { text = option; id = View.generateViewId(); isChecked = value == option; setTextColor(ui.color(ui.palette.ink)); buttonTintList = choiceTint(); setOnCheckedChangeListener { _, checked -> if(checked) changed(question.key, option) } }) }
+                    contentDescription = question.label
+                }
+                "multi_select" -> LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(ui.text(copy(Key.QUESTIONS_CHOOSE_MANY), T.TYPE_SMALL, ui.palette.muted).apply { gravity = Gravity.START; textAlignment = View.TEXT_ALIGNMENT_VIEW_START })
+                    val selected = (value as? List<*>).orEmpty()
+                    question.options.forEach { option -> addView(CheckBox(this@VerificationActivity).apply {
+                        text = option; isChecked = option in selected; setTextColor(ui.color(ui.palette.ink)); buttonTintList = choiceTint()
+                        setOnCheckedChangeListener { _, checked -> val now = (current.answers[question.key] as? List<*>).orEmpty().filterIsInstance<String>(); changed(question.key, if(checked) question.options.filter { it in now || it == option } else now - option) }
+                    }) }
+                }
+                "consent" -> CheckBox(this).apply { text = question.label; isChecked = value == true; setTextColor(ui.color(ui.palette.ink)); buttonTintList = choiceTint(); setOnCheckedChangeListener { _, checked -> changed(question.key, checked) } }
+                "country" -> Spinner(this).apply {
+                    val codes = Locale.getISOCountries().sortedBy { Locale("", it).displayCountry }
+                    adapter = object: ArrayAdapter<String>(this@VerificationActivity, android.R.layout.simple_spinner_dropdown_item, listOf(copy(Key.QUESTIONS_CHOOSE_COUNTRY)) + codes.map { Locale("", it).displayCountry }) {
+                        override fun getView(position: Int, convertView: View?, parent: android.view.ViewGroup) = (super.getView(position, convertView, parent) as TextView).apply { setTextColor(ui.color(if(position == 0) ui.palette.muted else ui.palette.ink)) }
+                    }
+                    setSelection(codes.indexOf(value as? String) + 1, false)
+                    contentDescription = question.label
+                    onItemSelectedListener = object: AdapterView.OnItemSelectedListener {
+                        override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) { val code = if(position == 0) null else codes[position - 1]; if(code != current.answers[question.key]) changed(question.key, code) }
+                        override fun onNothingSelected(parent: AdapterView<*>?) {}
+                    }
+                }
+                "date" -> field().apply {
+                    setText(value as? String); isFocusable = false; contentDescription = question.label
+                    setOnClickListener {
+                        val parts = (current.answers[question.key] as? String)?.split('-')?.mapNotNull { it.toIntOrNull() }?.takeIf { it.size == 3 }
+                        val today = java.util.Calendar.getInstance()
+                        android.app.DatePickerDialog(this@VerificationActivity, { _, y, m, d -> val date = String.format(Locale.ROOT, "%04d-%02d-%02d", y, m + 1, d); setText(date); changed(question.key, date) },
+                            parts?.get(0) ?: today.get(java.util.Calendar.YEAR), (parts?.get(1) ?: (today.get(java.util.Calendar.MONTH) + 1)) - 1, parts?.get(2) ?: today.get(java.util.Calendar.DAY_OF_MONTH)).show()
+                    }
+                }
+                else -> field().apply {
+                    setText(value as? String); contentDescription = question.label
+                    inputType = when(question.type) {
+                        "email" -> android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+                        "phone", "tel" -> android.text.InputType.TYPE_CLASS_PHONE
+                        "number" -> android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL or android.text.InputType.TYPE_NUMBER_FLAG_SIGNED
+                        "textarea" -> android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                        else -> android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                    }
+                    if(question.type == "textarea") minLines = 3
+                    addTextChangedListener(object: android.text.TextWatcher {
+                        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+                        override fun afterTextChanged(s: android.text.Editable?) { changed(question.key, s?.toString().orEmpty()) }
+                    })
+                    if(focusKey == question.key) focus = this
+                }
+            }
+            add(input, T.SPACING_XS)
+            current.answerErrors[question.key]?.let { add(ui.text(it, T.TYPE_SMALL, ui.palette.error).apply { gravity = Gravity.START; textAlignment = View.TEXT_ALIGNMENT_VIEW_START; accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }, T.SPACING_XXS) }
+        }
+        focus?.let { view -> view.requestFocus(); (view as? EditText)?.let { it.setSelection(it.text.length) } }
+        focusKey = null
+        button(copy(Key.QUESTIONS_SEND)) {
+            current.answerErrors = questionnaire.errors(current.answers)
+            if(current.answerErrors.isNotEmpty()) { render(); return@button }
+            work(copy(Key.QUESTIONS_SENDING), Key.ERRORS_SEND_ANSWERS_FAILED, {
+                current.sendAnswers(questionnaire, verifier)
+                current.received += copy(Key.RECEIPT_ANSWERS)
+                current.refresh()
+            })
+        }
+    }
+
+    private val ticker = android.os.Handler(android.os.Looper.getMainLooper())
+    private fun now() = android.os.SystemClock.elapsedRealtime()
+    private fun sendCode(current: CredflareVerification.Launch, channel: String, destination: String) =
+        work(copy(Key.CONTACT_CODE_SENDING), Key.ERRORS_SEND_CODE_FAILED, { current.requestCode(channel, destination, verifier, now()) })
+
+    private fun countdown(current: CredflareVerification.Launch, action: Button, wait: View) {
+        val tick = object: Runnable {
+            override fun run() {
+                val left = current.resendIn(now())
+                action.isEnabled = left == 0L; action.alpha = if(left == 0L) 1f else 0.5f
+                (wait as TextView).text = if(left == 0L) "" else copy(Key.CONTACT_CODE_RESEND_IN, "seconds" to (left + 999) / 1000)
+                wait.visibility = if(left == 0L) View.GONE else View.VISIBLE
+                if(left > 0) ticker.postDelayed(this, 1000)
+            }
+        }
+        tick.run()
+    }
+
+    private fun contact(current: CredflareVerification.Launch, channel: String) {
+        val email = channel == "email"
+        val request = current.codeRequest?.takeIf { current.codeChannel == channel }
+        if(request == null) {
+            title(copy(if(email) Key.EMAIL_TITLE else Key.PHONE_TITLE)); body(copy(if(email) Key.EMAIL_BODY else Key.PHONE_BODY))
+            add(ui.text(copy(if(email) Key.EMAIL_LABEL else Key.PHONE_LABEL), T.TYPE_LABEL).apply { gravity = Gravity.START; textAlignment = View.TEXT_ALIGNMENT_VIEW_START }, T.SPACING_LG)
+            val input = field().apply {
+                setText(current.destinations[channel]); contentDescription = copy(if(email) Key.EMAIL_LABEL else Key.PHONE_LABEL)
+                inputType = if(email) android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS else android.text.InputType.TYPE_CLASS_PHONE
+                if(email) hint = copy(Key.EMAIL_PLACEHOLDER)
+            }
+            add(input, T.SPACING_XS)
+            if(!email) small(copy(Key.PHONE_HINT))
+            val send = button(copy(if(email) Key.EMAIL_SEND else Key.PHONE_SEND)) {
+                val value = ContactCodes.normalize(channel, input.text.toString())
+                current.destinations[channel] = input.text.toString()
+                if(value == null) { current.error = copy(if(email) Key.EMAIL_INVALID else Key.PHONE_INVALID); render(); return@button }
+                sendCode(current, channel, value)
+            } as Button
+            countdown(current, send, small(""))
+            return
+        }
+        title(copy(Key.CONTACT_CODE_TITLE))
+        body(copy(Key.CONTACT_CODE_BODY, "destination" to request.destination, "minutes" to CredflareSpec.Requirements.CONTACT_CODES_TTL_MINUTES))
+        add(ui.text(copy(Key.CONTACT_CODE_LABEL), T.TYPE_LABEL).apply { gravity = Gravity.START; textAlignment = View.TEXT_ALIGNMENT_VIEW_START }, T.SPACING_LG)
+        val length = CredflareSpec.Requirements.CONTACT_CODES_CODE_LENGTH
+        lateinit var confirm: Button
+        val code = field().apply {
+            setText(current.codeDraft); contentDescription = copy(Key.CONTACT_CODE_LABEL)
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER; filters = arrayOf(android.text.InputFilter.LengthFilter(length))
+            textSize = 24f; gravity = Gravity.CENTER; letterSpacing = 0.3f
+            addTextChangedListener(object: android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+                override fun afterTextChanged(s: android.text.Editable?) { current.codeDraft = s?.toString().orEmpty(); confirm.isEnabled = current.codeDraft.length == length; confirm.alpha = if(confirm.isEnabled) 1f else 0.5f }
+            })
+        }
+        add(code, T.SPACING_XS)
+        confirm = button(copy(Key.CONTACT_CODE_CONFIRM), enabled = current.codeDraft.length == length) {
+            work(copy(Key.CONTACT_CODE_CONFIRMING), Key.ERRORS_CONFIRM_CODE_FAILED, {
+                current.confirmCode(channel, current.codeDraft, verifier)
+                current.received += copy(if(email) Key.RECEIPT_EMAIL else Key.RECEIPT_PHONE)
+                current.refresh()
+            })
+        } as Button
+        val resend = button(copy(Key.CONTACT_CODE_RESEND), primary = false, enabled = current.resendIn(now()) == 0L) {
+            current.destinations[channel]?.let { sendCode(current, channel, ContactCodes.normalize(channel, it) ?: it) }
+        } as Button
+        val wait = small("")
+        countdown(current, resend, wait)
+        small(copy(Key.CONTACT_CODE_SENDS_REMAINING, "count" to request.sendsRemaining))
+        button(copy(if(email) Key.EMAIL_CHANGE else Key.PHONE_CHANGE), primary = false) { current.codeRequest = null; current.codeChannel = null; current.codeDraft = ""; current.error = null; render() }
+        if(current.codeDraft.isEmpty()) code.requestFocus()
     }
 
     private fun receipt(current: CredflareVerification.Launch, info: SessionInfo) {

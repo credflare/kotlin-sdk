@@ -10,11 +10,15 @@ Use JDK 17 and an Android SDK with API 36. Node 20 or newer runs the spec check 
 
 `:sdk:testDebugUnitTest` runs on the JVM:
 
-* `ContractServerTest` starts `scripts/contract-server.mjs` with Node and calls the real client against the spec fixtures. It asserts the idempotency key on every upload and submission, and replays every backend rejection in `example/src/androidTest/assets/rejections` (one per code in the spec) through the client to check the parsed code and the copy the applicant sees.
+* `ContractServerTest` starts `scripts/contract-server.mjs` with Node and calls the real client against the spec fixtures. It asserts the idempotency key on every upload and submission, and replays every backend rejection in `example/src/androidTest/assets/rejections` (one per code in the spec) through the matching route (submit, code request or code confirmation) to check the parsed code and the title, message, action and help line from `spec/rejections.json`.
 * `GestureEngineTest` replays every trace in `sdk/src/test/resources/liveness-traces` (copied from `sdk-spec/fixtures/liveness-traces`) and asserts the expected outcome and position status.
 * `SettingsParsingTest` parses sessions, document requirements and their capture steps, requirement settings, reference place labels and liveness challenges from the captured API fixtures.
-* `RejectionCopyTest` parses every file in `example/src/androidTest/assets/rejections` and checks the copy the applicant sees for each code, with no place, an unnamed place, places to be at and places to stay away from.
+* `RejectionCopyTest` parses every file in `example/src/androidTest/assets/rejections` and checks the rejection screen for each code, the verifier fallback and the server message with **Try again** for a validation error without a code, and the location copy with no place, an unnamed place, places to be at and places to stay away from.
 * `LocationAcceptanceTest` checks the accuracy and age limits from the captured profile and the spec defaults, and that mock and unknown mock readings are sent to the server, which applies the `mock_location` policy.
+* `ShowIfCasesTest` replays all 62 backend cases in `show-if-cases.json` (copied from `sdk-spec/fixtures`) through `Conditions` and checks that they cover every spec operator.
+* `QuestionnaireTest` parses `questionnaire-session.json` and checks which questions are shown, validated and sent for different answers.
+* `ContactCodeTest` requests and confirms codes through the contract server, checks the resend countdown from the `202` and from the `resend_available_at` of a `resend_too_soon` rejection, and the spec rules for phone numbers and email addresses.
+* `RefreshTest` submits answers and fetches the session again: the phone requirement added in `requirement-added-session.json` comes next, a failed fetch keeps the pending state instead of the receipt, and a hidden answer rejected by the server shows its message with **Try again**.
 * `AttemptKeysTest` runs the document, liveness and location submissions against the contract server with every first response dropped. A retry reuses the idempotency key of each upload and submission and skips finished uploads; a new location fix, a changed document file or a liveness rejection starts a new attempt with new keys.
 
 ## Spec drift
@@ -40,7 +44,7 @@ cp ../sdk-spec/fixtures/liveness-traces/*.json sdk/src/test/resources/liveness-t
 
 CI runs this suite on an API 35 emulator with `./scripts/run-contract-instrumentation.sh`, which starts the contract server, installs both APKs, runs the instrumentation and fails unless it reports `PASS`. The manual steps are:
 
-The instrumentation calls the real client against `scripts/contract-server.mjs`, which serves the spec fixtures and records what the client sent. It covers sessions, document uploads, requirement settings, the liveness challenge, gesture, video and selfie uploads with their multipart fields and idempotency keys, facial and location submissions with their idempotency keys, `422` location rejections with their codes, and a real `422` for every spec rejection code.
+The instrumentation calls the real client against `scripts/contract-server.mjs`, which serves the spec fixtures and records what the client sent. It covers sessions, document uploads, requirement settings, the liveness challenge, gesture, video and selfie uploads with their multipart fields and idempotency keys, facial and location submissions with their idempotency keys, `422` location rejections with their codes, a real `422` for every spec rejection code with its screen, email and phone code requests and confirmations, and questionnaire answers followed by the requirement the workflow added.
 
 ```sh
 PORT=3118 node scripts/contract-server.mjs example/src/androidTest/assets &

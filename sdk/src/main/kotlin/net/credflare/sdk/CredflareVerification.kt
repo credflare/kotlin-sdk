@@ -30,6 +30,16 @@ object CredflareVerification {
         var locationKey = UUID.randomUUID()
         var locationFailures = 0
         val received = mutableListOf<String>()
+        var rejection: RejectionScreen? = null
+        private val help get() = info?.help ?: HelpContact(null, null)
+        val answers = mutableMapOf<String, Any?>()
+        var answerErrors: Map<String, String> = emptyMap()
+        var answersKey = UUID.randomUUID()
+        val destinations = mutableMapOf<String, String>()
+        var codeChannel: String? = null
+        var codeRequest: CodeRequest? = null
+        var resendAt = 0L
+        var codeDraft = ""
 
         fun selectDocument(doc: DocumentRequirement) { document = doc; index = 0; captures.clear(); submitKey = UUID.randomUUID(); error = null }
         fun addCapture(step: CaptureStep, file: SelectedFile) { captures[step.id] = file; submitKey = UUID.randomUUID() }
@@ -48,7 +58,7 @@ object CredflareVerification {
             catch(error: CredflareException) {
                 if(error.status != 422) throw error
                 discardLiveness()
-                throw IllegalArgumentException(Rejections.livenessMessage(error, verifier))
+                throw Rejected(Rejections.screen(error, null, verifier, help))
             }
             discardLiveness()
         }
@@ -58,11 +68,41 @@ object CredflareVerification {
             catch(error: CredflareException) {
                 if(error.status != 422) throw error
                 locationFix = null; locationFailures += 1
-                throw IllegalArgumentException(Rejections.locationMessage(error, reference, verifier))
+                throw Rejected(Rejections.screen(error, reference, verifier, help))
             }
             locationFix = null
         }
+        fun requestCode(channel: String, destination: String, verifier: String, now: Long, wallClock: Long = System.currentTimeMillis()) {
+            destinations[channel] = destination
+            val sent = try { client!!.requestCode(channel, destination) }
+            catch(error: CredflareException) {
+                val next = error.resendAvailableAt?.let { IsoTime.parse(it) }?.time
+                if(next != null) resendAt = now + (next - wallClock).coerceIn(0L, CredflareSpec.Requirements.CONTACT_CODES_RESEND_SECONDS * 1000L)
+                throw if(error.status == 422) Rejected(Rejections.screen(error, null, verifier, help)) else error
+            }
+            codeRequest = sent; codeChannel = channel; resendAt = now + sent.resendDelayMillis; codeDraft = ""
+        }
+        fun confirmCode(channel: String, code: String, verifier: String) {
+            try { client!!.confirmCode(channel, code) }
+            catch(error: CredflareException) { throw if(error.status == 422) Rejected(Rejections.screen(error, null, verifier, help)) else error }
+            codeChannel = null; codeRequest = null; codeDraft = ""
+        }
+        fun resendIn(now: Long): Long = (resendAt - now).coerceAtLeast(0)
+        fun sendAnswers(questionnaire: Questionnaire, verifier: String) {
+            answerErrors = questionnaire.errors(answers)
+            if(answerErrors.isNotEmpty()) throw IllegalArgumentException(answerErrors.values.first())
+            try { client!!.submitAnswers(questionnaire.fields(answers), answersKey) }
+            catch(error: CredflareException) { if(error.status == 422) { answersKey = UUID.randomUUID(); throw Rejected(Rejections.screen(error, null, verifier, help)) }; throw error }
+            answers.clear(); answersKey = UUID.randomUUID()
+        }
+        fun refresh() {
+            pendingReceipt = true
+            info = try { client!!.get() } catch(error: Exception) { throw RefreshFailed(error) }
+            pendingReceipt = false
+        }
     }
+    internal class Rejected(val screen: RejectionScreen): Exception(screen.message)
+    internal class RefreshFailed(cause: Exception): Exception(cause.message, cause)
     internal class SelectedFile(val bytes: ByteArray, val name: String, val source: CaptureSource) {
         val key = UUID.randomUUID()
         var fileId: Int? = null
