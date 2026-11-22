@@ -7,7 +7,8 @@ import java.util.concurrent.atomic.AtomicReference
 
 fun interface SessionProvider { fun createSession(): SessionDescriptor }
 object CredflareVerification {
-    internal class Launch(val provider: SessionProvider, val result: (VerificationResult) -> Unit) {
+    internal class Launch(val provider: SessionProvider, val outcome: (VerificationOutcome) -> Unit) {
+        fun result(value: VerificationResult, rejectionCode: String? = null) = outcome(VerificationOutcome(value, rejectionCode))
         val id = UUID.randomUUID().toString()
         var changed: (() -> Unit)? = null
         var cameraPath: String? = null
@@ -97,7 +98,12 @@ object CredflareVerification {
         }
         fun refresh() {
             pendingReceipt = true
-            info = try { client!!.get() } catch(error: Exception) { throw RefreshFailed(error) }
+            info = try { client!!.get() }
+            catch(error: CredflareException) {
+                if(error.status != 409) throw RefreshFailed(error)
+                info!!.copy(status = "closed", documents = emptyList(), requirements = emptyList(), questionnaire = Questionnaire(emptyList()))
+            }
+            catch(error: Exception) { throw RefreshFailed(error) }
             pendingReceipt = false
         }
     }
@@ -109,10 +115,11 @@ object CredflareVerification {
     }
     internal val active = AtomicReference<Launch?>()
     @Volatile var faceSignalProvider: () -> FaceSignalProvider = { MlKitFaceSignalProvider() }
-    fun launch(activity: Activity, provider: SessionProvider, onResult: (VerificationResult) -> Unit): Boolean {
-        val launch = Launch(provider, onResult)
+    fun launch(activity: Activity, provider: SessionProvider, onResult: (VerificationResult) -> Unit): Boolean = launchWithOutcome(activity, provider) { onResult(it.result) }
+    fun launchWithOutcome(activity: Activity, provider: SessionProvider, onOutcome: (VerificationOutcome) -> Unit): Boolean {
+        val launch = Launch(provider, onOutcome)
         if(!active.compareAndSet(null, launch)) return false
         try { activity.startActivity(Intent(activity, VerificationActivity::class.java).putExtra("flow_id", launch.id)); return true }
-        catch(_: Exception) { active.compareAndSet(launch, null); onResult(VerificationResult.FAILED); return false }
+        catch(_: Exception) { active.compareAndSet(launch, null); launch.result(VerificationResult.FAILED); return false }
     }
 }

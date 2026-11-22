@@ -48,6 +48,22 @@ class RefreshTest {
     }
 
     @Test
+    fun aCaseClosedByTheLastSubmitShowsTheReceipt() {
+        val flow = launch("closes")
+        flow.answers += answers
+        flow.sendAnswers(flow.info!!.questionnaire, "Acme")
+        flow.refresh()
+        val info = flow.info!!
+        assertFalse(flow.pendingReceipt)
+        assertFalse(info.isOpen)
+        assertFalse(info.outstanding)
+        assertFalse(info.asksQuestions)
+        assertEquals(null, info.nextRequirement)
+        assertFalse(info.needsHostSteps)
+        assertEquals("Michaela Reynolds's Workspace", info.requesterName)
+    }
+
+    @Test
     fun closedOrEmptySessionsShowTheReceipt() {
         val added = ContractServer.fixture("requirement-added-session.json").getJSONObject("data")
         assertTrue(SessionInfo.fromJson(added).outstanding)

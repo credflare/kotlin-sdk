@@ -27,6 +27,7 @@ const server = createServer(async (req,res) => {
  const rejection = token?.match(/^Bearer reject:([a-z_.]+)$/)?.[1];
  if (rejection && (req.url.endsWith('/submit') || /-codes(\/confirm)?$/.test(req.url))) return send(422,'rejections/'+rejection);
  if (token === 'Bearer resend-with-time' && /-codes$/.test(req.url)) return send(422,'rejections/phone.resend_too_soon');
+ if (token === 'Bearer closes' && req.method === 'GET' && answered.has(token)) return send(409,'session-closed');
  if (token === 'Bearer refresh-fails' && req.method === 'GET' && answered.has(token)) return req.socket.destroy();
  const code = req.url.match(/\/(email|phone)-codes(\/confirm)?$/);
  if (code) {
@@ -51,7 +52,7 @@ const server = createServer(async (req,res) => {
   if (text.includes('"form_submission"')) {answered.add(token);submits[submits.length-1].fields=JSON.parse(text).fields;return JSON.parse(text).fields.employer !== undefined && JSON.parse(text).fields.employment !== 'Employed' ? send(422,'questionnaire-hidden-answer') : send(201,'questionnaire-submission');}
   return send(201,'submission');
  }
- if (token==='Bearer questionnaire' || token==='Bearer refresh-fails') return send(200,answered.has(token)?'requirement-added-session':'questionnaire-session');
+ if (token==='Bearer questionnaire' || token==='Bearer refresh-fails' || token==='Bearer closes') return send(200,answered.has(token)?'requirement-added-session':'questionnaire-session');
  return send(200,token==='Bearer selfie'?'facial-session':token==='Bearer capture'?'capture-session':'capture-snapshot-or-upload');
 });
 server.listen(Number(process.env.PORT || 0),'127.0.0.1',()=>console.log(server.address().port));

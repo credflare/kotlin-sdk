@@ -18,7 +18,7 @@ Use JDK 17 and an Android SDK with API 36. Node 20 or newer runs the spec check 
 * `ShowIfCasesTest` replays all 62 backend cases in `show-if-cases.json` (copied from `sdk-spec/fixtures`) through `Conditions` and checks that they cover every spec operator.
 * `QuestionnaireTest` parses `questionnaire-session.json` and checks which questions are shown, validated and sent for different answers.
 * `ContactCodeTest` requests and confirms codes through the contract server, checks the resend countdown from the `202` and from the `resend_available_at` of a `resend_too_soon` rejection, and the spec rules for phone numbers and email addresses.
-* `RefreshTest` submits answers and fetches the session again: the phone requirement added in `requirement-added-session.json` comes next, a failed fetch keeps the pending state instead of the receipt, and a hidden answer rejected by the server shows its message with **Try again**.
+* `RefreshTest` submits answers and fetches the session again: the phone requirement added in `requirement-added-session.json` comes next, a failed fetch keeps the pending state instead of the receipt, a `409` because the last submission closed the case shows the receipt, and a hidden answer rejected by the server shows its message with **Try again**.
 * `AttemptKeysTest` runs the document, liveness and location submissions against the contract server with every first response dropped. A retry reuses the idempotency key of each upload and submission and skips finished uploads; a new location fix, a changed document file or a liveness rejection starts a new attempt with new keys.
 
 ## Spec drift

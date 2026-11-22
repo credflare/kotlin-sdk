@@ -154,6 +154,7 @@ data class Evidence(val fileId: Int, val source: CaptureSource, val side: Docume
     internal fun json() = JSONObject().put("file_id", fileId).put("source", source.value).put("side", side.value)
 }
 enum class VerificationResult { SUBMITTED, CANCELLED, HOST_ACTION_REQUIRED, FAILED }
+data class VerificationOutcome(val result: VerificationResult, val rejectionCode: String? = null)
 internal object IsoTime {
     private fun formatter() = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.ROOT).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
     fun format(millis: Long): String = formatter().format(java.util.Date(millis))

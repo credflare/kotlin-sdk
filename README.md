@@ -15,7 +15,7 @@ CredflareVerification.launch(activity, SessionProvider {
 }
 ```
 
-The launcher returns false when a flow is already open. The provider runs on a worker thread and returns a `SessionDescriptor`. The host backend creates or resumes the correct verification case and returns its temporary descriptor. Closing the flow preserves the case. `SUBMITTED` confirms collection, `HOST_ACTION_REQUIRED` returns control for checks the SDK cannot collect, or when a rejection leaves nothing to do in the app, and `CANCELLED` closes the native interface. Receipts are separate from verification decisions.
+The launcher returns false when a flow is already open. The provider runs on a worker thread and returns a `SessionDescriptor`. The host backend creates or resumes the correct verification case and returns its temporary descriptor. Closing the flow preserves the case. `SUBMITTED` confirms collection, `HOST_ACTION_REQUIRED` returns control for checks the SDK cannot collect, or when a rejection leaves nothing to do in the app, and `CANCELLED` closes the native interface. `launchWithOutcome()` reports the same result as a `VerificationOutcome`, whose `rejectionCode` names the rejection (for example `phone.not_configured`) when the applicant left from a screen with nothing left to do in the app, so the host app can offer another way. Receipts are separate from verification decisions.
 
 The flow supports camera photos, file selection, front/back steps, preview, replacement and explicit submission. Each document follows its backend capture rule: `upload`, `snapshot`, `snapshot_or_upload`, or `snapshot_and_upload`. Required document groups remain distinct from capture-source choices. Server file types and size limits are applied before upload and enforced again by the API.
 
@@ -51,7 +51,7 @@ The contract suite, unit tests, emulator runs and the face signal probe are desc
 
 ## Developer configured facial and location collection
 
-Choose the compliance profile on your server when creating the case. The recipient does not choose a profile or verification mode. The SDK collects outstanding documents first, then the questionnaire, then the outstanding facial, location, email and phone requirements in profile order. After every submission and code confirmation it fetches the session again: a requirement the workflow added in the meantime is collected next, and the receipt appears only when nothing is outstanding or the case is no longer open. If that fetch fails, the SDK says so and offers to try again instead of showing the receipt.
+Choose the compliance profile on your server when creating the case. The recipient does not choose a profile or verification mode. The SDK collects outstanding documents first, then the questionnaire, then the outstanding facial, location, email and phone requirements in profile order. After every submission and code confirmation it fetches the session again: a requirement the workflow added in the meantime is collected next, and the receipt appears only when nothing is outstanding or the case is no longer open, including when the session answers `409` because the last submission closed the case. If that fetch fails, the SDK says so and offers to try again instead of showing the receipt.
 
 The questionnaire shows each question whose `show_if` conditions match the answers given above it. Hidden questions are not validated and their answers are not sent. `Questionnaire` and `Conditions` evaluate the same rules for a host that builds its own form.
 

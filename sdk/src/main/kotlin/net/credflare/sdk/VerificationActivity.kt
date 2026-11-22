@@ -63,9 +63,9 @@ class VerificationActivity: Activity() {
             flow?.let { current -> if(CredflareVerification.active.compareAndSet(current, null)) current.result(VerificationResult.CANCELLED) }
         }
     }
-    private fun result(value: VerificationResult) {
+    private fun result(value: VerificationResult, rejectionCode: String? = null) {
         val current = flow
-        if(current != null && CredflareVerification.active.compareAndSet(current, null)) current.result(value)
+        if(current != null && CredflareVerification.active.compareAndSet(current, null)) current.result(value, rejectionCode)
         finish()
     }
     private fun closeRequested() {
@@ -363,7 +363,7 @@ class VerificationActivity: Activity() {
                     val destination = channel?.let { current.destinations[it] }
                     if(channel != null && destination != null) sendCode(current, channel, destination) else render()
                 }
-                "leave" -> result(VerificationResult.HOST_ACTION_REQUIRED)
+                "leave" -> result(VerificationResult.HOST_ACTION_REQUIRED, screen.code)
                 else -> render()
             }
         }

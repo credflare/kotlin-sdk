@@ -81,4 +81,15 @@ class ContactCodeTest {
         try { launch.requestCode("phone", "+237650000002", "Acme", 1_000, wall); throw AssertionError("not rejected") } catch(_: CredflareVerification.Rejected) {}
         assertEquals(30_000L, launch.resendIn(1_000))
     }
+
+    @Test
+    fun leavingFromANotConfiguredScreenReportsItsCode() {
+        val outcomes = mutableListOf<VerificationOutcome>()
+        val launch = CredflareVerification.Launch({ error("unused") }) { outcomes += it }
+        launch.client = server.session("reject:phone.not_configured")
+        val screen = try { launch.requestCode("phone", "+237650000001", "Acme", 0); null } catch(error: CredflareVerification.Rejected) { error.screen }
+        assertEquals("leave", screen!!.action)
+        launch.result(VerificationResult.HOST_ACTION_REQUIRED, screen.code)
+        assertEquals(listOf(VerificationOutcome(VerificationResult.HOST_ACTION_REQUIRED, "phone.not_configured")), outcomes)
+    }
 }
