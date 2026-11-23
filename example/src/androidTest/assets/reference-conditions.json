@@ -184,5 +184,101 @@
       "x": "﻿ Jane　 Doe "
     },
     "expect": true
+  },
+  {
+    "name": "regex unicode code point escape",
+    "condition": {
+      "path": "form.x",
+      "op": "regex",
+      "value": "^\\u{41}$"
+    },
+    "form": {
+      "x": "A"
+    },
+    "expect": true
+  },
+  {
+    "name": "regex astral code point escape",
+    "condition": {
+      "path": "form.x",
+      "op": "regex",
+      "value": "^\\u{1F600}$"
+    },
+    "form": {
+      "x": "😀"
+    },
+    "expect": true
+  },
+  {
+    "name": "regex code point escape in class",
+    "condition": {
+      "path": "form.x",
+      "op": "regex",
+      "value": "^[\\u{41}-\\u{43}]+$"
+    },
+    "form": {
+      "x": "ABC"
+    },
+    "expect": true
+  },
+  {
+    "name": "regex code point escape out of range",
+    "condition": {
+      "path": "form.x",
+      "op": "regex",
+      "value": "^\\u{110000}$"
+    },
+    "form": {
+      "x": "A"
+    },
+    "expect": false
+  },
+  {
+    "name": "regex four digit escape",
+    "condition": {
+      "path": "form.x",
+      "op": "regex",
+      "value": "^\\u0041$"
+    },
+    "form": {
+      "x": "A"
+    },
+    "expect": true
+  },
+  {
+    "name": "contains small number",
+    "condition": {
+      "path": "form.x",
+      "op": "contains",
+      "value": "0.000"
+    },
+    "form": {
+      "x": 0.0001
+    },
+    "expect": true
+  },
+  {
+    "name": "contains large number",
+    "condition": {
+      "path": "form.x",
+      "op": "contains",
+      "value": "1e+21"
+    },
+    "form": {
+      "x": 1e+21
+    },
+    "expect": true
+  },
+  {
+    "name": "lt invalid offset",
+    "condition": {
+      "path": "form.x",
+      "op": "lt",
+      "value": "2024-01-01"
+    },
+    "form": {
+      "x": "2024-01-01T00:00+99:00"
+    },
+    "expect": false
   }
 ]

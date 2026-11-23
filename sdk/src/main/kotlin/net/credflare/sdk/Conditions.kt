@@ -45,10 +45,21 @@ object Conditions {
     private fun values(v: Any?): Collection<Any?> = when(v) { is List<*> -> v; is Map<*, *> -> v.values; else -> emptyList() }
 
     private fun numberText(v: Number): String {
-        if(v is BigDecimal) return numberText(v.toDouble())
         val d = v.toDouble()
-        if(d == Math.floor(d) && Math.abs(d) < 1e21) return BigDecimal(d).toPlainString()
-        return d.toString()
+        if(d.isNaN()) return "NaN"
+        if(d.isInfinite()) return if(d > 0) "Infinity" else "-Infinity"
+        if(d == 0.0) return "0"
+        val exact = BigDecimal(d.toString()).stripTrailingZeros()
+        val digits = exact.unscaledValue().abs().toString()
+        val k = digits.length
+        val n = exact.precision() - exact.scale()
+        val body = when {
+            n in k..21 -> digits + "0".repeat(n - k)
+            n in 1..21 -> digits.substring(0, n) + "." + digits.substring(n)
+            n in -5..0 -> "0." + "0".repeat(-n) + digits
+            else -> digits.substring(0, 1) + (if(k > 1) "." + digits.substring(1) else "") + "e" + (if(n - 1 >= 0) "+" else "-") + Math.abs(n - 1)
+        }
+        return if(d < 0) "-$body" else body
     }
     private fun text(v: Any?): String = when(v) { true -> "1"; false, null -> ""; is Number -> numberText(v); else -> v.toString() }
 
@@ -93,6 +104,7 @@ object Conditions {
         iso = iso.replace(Regex("([+-][0-9]{2})([0-9]{2})$"), "$1:$2")
         val m = TIME.matchEntire(iso) ?: return null
         val g = m.groupValues
+        if(g[8] != "Z" && (g[10].toInt() > 23 || g[11].toInt() > 59)) return null
         val millis = g[7].take(3).padEnd(3, '0').ifEmpty { "0" }.toInt()
         val endOfDay = g[4] == "24" && g[5] == "00" && g[6].ifEmpty { "0" }.toInt() == 0 && millis == 0
         val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
@@ -136,6 +148,17 @@ object Conditions {
                 'd' -> "[0-9]"; 'D' -> "[^0-9]"
                 'w' -> "[A-Za-z0-9_]"; 'W' -> "[^A-Za-z0-9_]"
                 's' -> "[$SPACE]"; 'S' -> "[^$SPACE]"
+                'u' -> {
+                    val close = pattern.indexOf('}', i + 2)
+                    if(i + 2 < pattern.length && pattern[i + 2] == '{' && close > i + 3 && pattern.substring(i + 3, close).all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) {
+                        val hex = pattern.substring(i + 3, close)
+                        if(hex.trimStart('0').length > 6 || hex.toLong(16) > 0x10FFFF) throw IllegalArgumentException(pattern)
+                        i = close + 1
+                        out.append("\\x{").append(hex).append('}')
+                        continue
+                    }
+                    "\\u"
+                }
                 else -> "\\$next"
             })
             i += 2

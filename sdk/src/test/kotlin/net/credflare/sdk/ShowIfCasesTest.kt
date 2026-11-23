@@ -36,7 +36,7 @@ class ShowIfCasesTest {
             val condition = case.getJSONObject("condition").let { Condition(it.getString("path"), it.getString("op"), Conditions.plain(it.opt("value"))) }
             if(Conditions.test(condition, mapOf("form" to form(case.get("form")))) != case.getBoolean("expect")) failures += case.getString("name")
         }
-        assertEquals(15, cases.length())
+        assertEquals(23, cases.length())
         assertEquals(emptyList<String>(), failures)
     }
 
