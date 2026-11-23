@@ -85,8 +85,15 @@ data class SessionInfo(val environment: String, val requesterName: String?, val 
     constructor(environment: String, requesterName: String?, maxFileSizeBytes: Long, allowedFileTypes: List<String>, documents: List<DocumentRequirement>, requirements: List<VerificationRequirement>? = emptyList(), hasForms: Boolean, hasProfile: Boolean = true):
         this(environment, requesterName, maxFileSizeBytes, allowedFileTypes, documents, requirements.orEmpty(), Questionnaire.flag(hasForms), hasProfile)
     @Deprecated("Copy with a questionnaire instead of a flag.")
+    @JvmName("copyWithFlag")
     fun copy(environment: String = this.environment, requesterName: String? = this.requesterName, maxFileSizeBytes: Long = this.maxFileSizeBytes, allowedFileTypes: List<String> = this.allowedFileTypes, documents: List<DocumentRequirement> = this.documents, requirements: List<VerificationRequirement> = this.requirements, hasForms: Boolean, hasProfile: Boolean = this.hasProfile): SessionInfo =
-        copy(environment = environment, requesterName = requesterName, maxFileSizeBytes = maxFileSizeBytes, allowedFileTypes = allowedFileTypes, documents = documents, requirements = requirements, questionnaire = Questionnaire.flag(hasForms), hasProfile = hasProfile)
+        copy(environment = environment, requesterName = requesterName, maxFileSizeBytes = maxFileSizeBytes, allowedFileTypes = allowedFileTypes, documents = documents, requirements = requirements, questionnaire = if(hasForms == this.hasForms) questionnaire else Questionnaire.flag(hasForms), hasProfile = hasProfile)
+    @Deprecated("Kept for compiled integrations.", level = DeprecationLevel.HIDDEN)
+    fun copy(environment: String = this.environment, requesterName: String? = this.requesterName, maxFileSizeBytes: Long = this.maxFileSizeBytes, allowedFileTypes: List<String> = this.allowedFileTypes, documents: List<DocumentRequirement> = this.documents, requirements: List<VerificationRequirement>? = this.requirements, hasForms: Boolean = this.hasForms, hasProfile: Boolean = this.hasProfile): SessionInfo =
+        copy(environment = environment, requesterName = requesterName, maxFileSizeBytes = maxFileSizeBytes, allowedFileTypes = allowedFileTypes, documents = documents, requirements = requirements.orEmpty(), questionnaire = if(hasForms == this.hasForms) questionnaire else Questionnaire.flag(hasForms), hasProfile = hasProfile)
+    @Deprecated("Kept for compiled integrations.", level = DeprecationLevel.HIDDEN)
+    @JvmName("component7")
+    fun hasFormsComponent(): Boolean = hasForms
     val hasForms get() = questionnaire.questions.isNotEmpty()
     val isOpen get() = status in CredflareSpec.Requirements.REFRESH_OPEN_STATUSES
     val outstanding get() = isOpen && (documents.isNotEmpty() || requirements.isNotEmpty() || hasForms)
