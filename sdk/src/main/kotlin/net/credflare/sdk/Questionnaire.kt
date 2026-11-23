@@ -43,7 +43,11 @@ class Questionnaire(val questions: List<Question>, val earlier: Map<String, Any?
     fun answer(key: String, answers: Map<String, Any?>): Any? = if(answers.containsKey(key)) answers[key] else earlier[key]
 
     fun submitted(answers: Map<String, Any?>, earlier: Map<String, Any?> = emptyMap()): Map<String, Any?> =
-        visible(answers, earlier).mapNotNull { question -> normalized(question, answer(question.key, answers))?.let { question.key to it } }.toMap()
+        visible(answers, earlier).mapNotNull { question ->
+            val value = normalized(question, answer(question.key, answers))
+            val cleared = value == null && answers.containsKey(question.key) && (this.earlier.containsKey(question.key) || earlier.containsKey(question.key))
+            if(value != null || cleared) question.key to value else null
+        }.toMap()
 
     fun fields(answers: Map<String, Any?>, earlier: Map<String, Any?> = emptyMap()): JSONObject {
         val fields = JSONObject()
@@ -57,8 +61,13 @@ class Questionnaire(val questions: List<Question>, val earlier: Map<String, Any?
         private fun json(value: Any?): Any? = when(value) {
             is List<*> -> JSONArray(value.map { json(it) })
             is Map<*, *> -> JSONObject().apply { value.forEach { (k, v) -> put(k.toString(), json(v)) } }
+            null -> JSONObject.NULL
             else -> value
         }
+
+        internal fun display(value: Any?): String = when(value) { null -> ""; is String -> value; is Number -> numberText(value); else -> value.toString() }
+
+        private fun numberText(value: Number): String = try { (if(value is BigDecimal) value else BigDecimal(value.toString())).toPlainString() } catch(_: NumberFormatException) { value.toString() }
 
         internal fun flag(hasForms: Boolean) = Questionnaire(if(hasForms) listOf(Question("", "", "", true)) else emptyList())
 
@@ -68,11 +77,11 @@ class Questionnaire(val questions: List<Question>, val earlier: Map<String, Any?
         private fun empty(value: Any?) = value == null || (value is String && value.isBlank()) || (value is List<*> && value.isEmpty())
 
         internal fun normalized(question: Question, value: Any?): Any? {
-            if(question.type == "consent") return value == true
+            if(question.type == "consent") return if(value == null) null else value == true
             if(question.type == "founders") return founders(value)
             if(empty(value)) return null
             return when(question.type) {
-                "number" -> (if(value is BigDecimal) value.toPlainString() else value.toString()).trim()
+                "number" -> (if(value is Number) numberText(value) else value.toString()).trim()
                 "multi_select" -> (value as? List<*>)?.distinct() ?: listOf(value)
                 "country" -> value.toString().trim().uppercase()
                 else -> if(value is String) value.trim() else value
@@ -103,8 +112,8 @@ class Questionnaire(val questions: List<Question>, val earlier: Map<String, Any?
                 "number" -> {
                     val number = (answer as String).takeIf { Regex(R.QUESTIONS_NUMBER_PATTERN).matches(it) }?.let { BigDecimal(it) }
                     if(number == null) SpecCopy.text(Key.QUESTIONS_INVALID_NUMBER)
-                    else if(question.min != null && number < BigDecimal(question.min)) SpecCopy.text(Key.QUESTIONS_NUMBER_MIN, "min" to plain(question.min))
-                    else if(question.max != null && number > BigDecimal(question.max)) SpecCopy.text(Key.QUESTIONS_NUMBER_MAX, "max" to plain(question.max))
+                    else if(question.min != null && number < BigDecimal.valueOf(question.min)) SpecCopy.text(Key.QUESTIONS_NUMBER_MIN, "min" to plain(question.min))
+                    else if(question.max != null && number > BigDecimal.valueOf(question.max)) SpecCopy.text(Key.QUESTIONS_NUMBER_MAX, "max" to plain(question.max))
                     else null
                 }
                 "date" -> if(!realDate(answer as String)) SpecCopy.text(Key.QUESTIONS_INVALID_DATE) else null

@@ -37,6 +37,7 @@ object CredflareVerification {
         val earlier = mutableMapOf<String, Any?>()
         var answerErrors: Map<String, String> = emptyMap()
         var answersKey = UUID.randomUUID()
+        private var answersPayload: String? = null
         val destinations = mutableMapOf<String, String>()
         var codeChannel: String? = null
         var codeRequest: CodeRequest? = null
@@ -92,6 +93,12 @@ object CredflareVerification {
             }
             codeRequest = sent; codeChannel = channel; codeDestination = destination; resendAt[channel] = now + sent.resendDelayMillis; codeDraft = ""; changeAfter = false
         }
+        fun codeTarget(channel: String) = codeDestination?.takeIf { codeChannel == channel } ?: destinations[channel]
+        fun recoverClosed(error: CredflareException): Boolean {
+            if(error.status != 409 || client == null || info == null) return false
+            refresh()
+            return true
+        }
         fun changeDestination() { codeChannel = null; changeAfter = false }
         fun confirmCode(channel: String, code: String, verifier: String) {
             try { client!!.confirmCode(channel, code) }
@@ -104,9 +111,12 @@ object CredflareVerification {
             answerErrors = questionnaire.errors(answers, earlier)
             if(answerErrors.isNotEmpty()) throw IllegalArgumentException(answerErrors.values.first())
             val sent = questionnaire.submitted(answers, earlier)
-            try { client!!.submitAnswers(questionnaire.fields(answers, earlier), answersKey) }
-            catch(error: CredflareException) { if(error.status == 422) { answersKey = UUID.randomUUID(); throw Rejected(Rejections.screen(error, null, verifier, help)) }; throw error }
-            earlier += sent; answers.clear(); answersKey = UUID.randomUUID()
+            val fields = questionnaire.fields(answers, earlier)
+            if(answersPayload != null && answersPayload != fields.toString()) answersKey = UUID.randomUUID()
+            answersPayload = fields.toString()
+            try { client!!.submitAnswers(fields, answersKey) }
+            catch(error: CredflareException) { if(error.status == 422) { answersKey = UUID.randomUUID(); answersPayload = null; throw Rejected(Rejections.screen(error, null, verifier, help)) }; throw error }
+            earlier += sent; answers.clear(); answersKey = UUID.randomUUID(); answersPayload = null
         }
         fun refresh() {
             pendingReceipt = true

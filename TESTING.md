@@ -15,10 +15,10 @@ Use JDK 17 and an Android SDK with API 36. Node 20 or newer runs the spec check 
 * `SettingsParsingTest` parses sessions, document requirements and their capture steps, requirement settings, reference place labels and liveness challenges from the captured API fixtures.
 * `RejectionCopyTest` parses every file in `example/src/androidTest/assets/rejections` and checks the rejection screen for each code, the verifier fallback and the server message with **Try again** for a validation error without a code, and the location copy with no place, an unnamed place, places to be at and places to stay away from.
 * `LocationAcceptanceTest` checks the accuracy and age limits from the captured profile and the spec defaults, and that mock and unknown mock readings are sent to the server, which applies the `mock_location` policy.
-* `ShowIfCasesTest` replays all 62 backend cases in `show-if-cases.json` (copied from `sdk-spec/fixtures`) through `Conditions` and checks that they cover every spec operator.
-* `QuestionnaireTest` parses `questionnaire-session.json` and checks which questions are shown, validated and sent for different answers.
+* `ShowIfCasesTest` replays every backend case in `show-if-cases.json` (copied from `sdk-spec/fixtures`) through `Conditions` and checks that they cover every spec operator. It also replays `reference-conditions.json`, the results of `sdk-spec/scripts/conditions.mjs` for edge inputs: digits from other scripts, Unicode whitespace in patterns and fuzzy matches, numbers that overflow, hour 24 and the fuzzy length cut.
+* `QuestionnaireTest` parses `questionnaire-session.json` and `questionnaire-earlier-answers-session.json` and checks which questions are shown, validated and sent for different answers, including earlier answers, a cleared answer sent as `null`, an empty `fields` object and exact decimal limits.
 * `ContactCodeTest` requests and confirms codes through the contract server, checks the resend countdown from the `202` and from the `resend_available_at` of a `resend_too_soon` rejection, and the spec rules for phone numbers and email addresses.
-* `RefreshTest` submits answers and fetches the session again: the phone requirement added in `requirement-added-session.json` comes next, a failed fetch keeps the pending state instead of the receipt, a `409` because the last submission closed the case shows the receipt, and a hidden answer rejected by the server shows its message with **Try again**.
+* `RefreshTest` submits answers and fetches the session again: the phone requirement added in `requirement-added-session.json` comes next, a failed fetch keeps the pending state instead of the receipt, a `409` because the last submission closed the case shows the receipt, a `409` from the submit itself shows the receipt, an edited retry gets a new idempotency key, and a hidden answer rejected by the server shows its message with **Try again**.
 * `AttemptKeysTest` runs the document, liveness and location submissions against the contract server with every first response dropped. A retry reuses the idempotency key of each upload and submission and skips finished uploads; a new location fix, a changed document file or a liveness rejection starts a new attempt with new keys.
 
 ## Spec drift
@@ -38,13 +38,13 @@ cp ../sdk-spec/fixtures/rejections/*.json example/src/androidTest/assets/rejecti
 cp ../sdk-spec/fixtures/liveness-traces/*.json sdk/src/test/resources/liveness-traces/
 ```
 
-`cancelled.json`, `capture-snapshot-or-upload.json`, `capture-snapshot_and_upload.json` and `sample-front.png` are local to this repository.
+`cancelled.json`, `capture-snapshot-or-upload.json`, `capture-snapshot_and_upload.json`, `reference-conditions.json` and `sample-front.png` are local to this repository.
 
 ## Contract suite on a device
 
 CI runs this suite on an API 35 emulator with `./scripts/run-contract-instrumentation.sh`, which starts the contract server, installs both APKs, runs the instrumentation and fails unless it reports `PASS`. The manual steps are:
 
-The instrumentation calls the real client against `scripts/contract-server.mjs`, which serves the spec fixtures and records what the client sent. It covers sessions, document uploads, requirement settings, the liveness challenge, gesture, video and selfie uploads with their multipart fields and idempotency keys, facial and location submissions with their idempotency keys, `422` location rejections with their codes, a real `422` for every spec rejection code with its screen, email and phone code requests and confirmations, and questionnaire answers followed by the requirement the workflow added.
+The instrumentation calls the real client against `scripts/contract-server.mjs`, which serves the spec fixtures and records what the client sent. It covers sessions, document uploads, requirement settings, the liveness challenge, gesture, video and selfie uploads with their multipart fields and idempotency keys, facial and location submissions with their idempotency keys, `422` location rejections with their codes, a real `422` for every spec rejection code with its screen, email and phone code requests and confirmations, questionnaire answers followed by the requirement the workflow added, and the `show_if` cases from `show-if-cases.json` and `reference-conditions.json` evaluated on the device.
 
 ```sh
 PORT=3118 node scripts/contract-server.mjs example/src/androidTest/assets &

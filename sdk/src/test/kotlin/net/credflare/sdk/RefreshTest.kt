@@ -66,6 +66,34 @@ class RefreshTest {
     }
 
     @Test
+    fun aConflictOnSubmitShowsTheReceipt() {
+        val flow = launch("closed-submit")
+        flow.answers += answers
+        val error = try { flow.sendAnswers(flow.info!!.questionnaire, "Acme"); null } catch(error: CredflareException) { error }
+        assertEquals(409, error!!.status)
+        assertTrue(flow.recoverClosed(error))
+        assertFalse(flow.pendingReceipt)
+        assertFalse(flow.info!!.isOpen)
+        assertFalse(flow.info!!.asksQuestions)
+        assertFalse(flow.recoverClosed(CredflareException(500, "Request failed.")))
+    }
+
+    @Test
+    fun anEditedRetryGetsANewKey() {
+        val flow = launch("flaky")
+        flow.info = SessionInfo.fromJson(ContractServer.fixture("questionnaire-session.json").getJSONObject("data"))
+        flow.answers += answers
+        val first = flow.answersKey
+        try { flow.sendAnswers(flow.info!!.questionnaire, "Acme"); throw AssertionError("not dropped") } catch(_: CredflareException) {}
+        flow.answers["employment"] = "Retired"
+        try { flow.sendAnswers(flow.info!!.questionnaire, "Acme"); throw AssertionError("not dropped") } catch(_: CredflareException) {}
+        val second = flow.answersKey
+        flow.sendAnswers(flow.info!!.questionnaire, "Acme")
+        assertTrue(first != second)
+        assertEquals(listOf(first.toString(), second.toString(), second.toString()), server.attempts(listOf(first, second)).map { it.getString("key") })
+    }
+
+    @Test
     fun closedOrEmptySessionsShowTheReceipt() {
         val added = ContractServer.fixture("requirement-added-session.json").getJSONObject("data")
         assertTrue(SessionInfo.fromJson(added).outstanding)

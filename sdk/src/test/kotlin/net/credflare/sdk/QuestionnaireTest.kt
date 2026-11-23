@@ -103,6 +103,42 @@ class QuestionnaireTest {
     }
 
     @Test
+    fun clearingAReAskedAnswerSendsNull() {
+        val data = ContractServer.fixture("questionnaire-earlier-answers-session.json").getJSONObject("data")
+        data.getJSONObject("profile").put("form_schema", JSONArray().put(question("employment")).put(question("employer")).put(question("contact_email")))
+        val form = SessionInfo.fromJson(data).questionnaire
+        val cleared = mapOf<String, Any?>("employment" to "")
+        assertEquals(listOf("employment", "contact_email"), form.visible(cleared).map { it.key })
+        val fields = form.fields(cleared)
+        assertEquals(setOf("employment"), fields.keys().asSequence().toSet())
+        assertTrue(fields.isNull("employment"))
+        assertEquals("""{"employment":null}""", fields.toString())
+        assertFalse(form.fields(mapOf("contact_email" to "")).has("contact_email"))
+    }
+
+    @Test
+    fun untouchedOptionalQuestionsSendAnEmptyObject() {
+        val optional = org.json.JSONObject(question("terms").toString()).put("required", false)
+        val form = Questionnaire.fromJson(JSONArray().put(optional).put(question("contact_email")))
+        assertEquals("{}", form.fields(emptyMap()).toString())
+        assertEquals(emptyMap<String, String>(), form.errors(emptyMap()))
+        assertEquals(false, form.fields(mapOf("terms" to false)).getBoolean("terms"))
+        assertEquals(SpecCopy.text(Key.QUESTIONS_CONSENT_REQUIRED), Questionnaire.fromJson(JSONArray().put(question("terms"))).errors(emptyMap())["terms"])
+    }
+
+    @Test
+    fun decimalBoundsAndNumericEarlierAnswersAreExact() {
+        val income = org.json.JSONObject(question("income").toString()).put("min", 0.1).put("max", 0.3).apply { remove("show_if") }
+        val form = Questionnaire.fromJson(JSONArray().put(income), org.json.JSONObject().put("income", 42))
+        assertEquals(null, form.errors(mapOf("income" to "0.1"))["income"])
+        assertEquals(null, form.errors(mapOf("income" to "0.3"))["income"])
+        assertEquals("Enter at least 0.1.", form.errors(mapOf("income" to "0.0999"))["income"])
+        assertEquals("42", Questionnaire.display(form.answer("income", emptyMap())))
+        assertEquals("42", form.fields(emptyMap()).get("income"))
+        assertEquals("10000000000", Questionnaire.display(1.0E10))
+    }
+
+    @Test
     fun showIfSeesTheValuesThatAreSent() {
         val answers = complete + mapOf("employment" to "Self employed", "income" to " 9999999.123456789012345678901 ", "sources" to emptyList<String>())
         val fields = questionnaire.fields(answers)

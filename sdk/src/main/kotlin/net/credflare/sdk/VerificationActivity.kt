@@ -96,6 +96,10 @@ class VerificationActivity: Activity() {
             try { task(); ok = true }
             catch(error: CredflareVerification.Rejected) { current.rejection = error.screen }
             catch(error: CredflareVerification.RefreshFailed) { current.error = copy(Key.ERRORS_REFRESH_FAILED) }
+            catch(error: CredflareException) {
+                try { if(!current.recoverClosed(error)) current.error = describe(error, failure) }
+                catch(_: CredflareVerification.RefreshFailed) { current.error = copy(Key.ERRORS_REFRESH_FAILED) }
+            }
             catch(error: Exception) { current.error = describe(error, failure) }
             finally { current.busy = false; current.busyMessage = null; current.changed?.invoke() }
             if(ok && then != null) runOnUiThread { if(!isFinishing) then() }
@@ -360,7 +364,7 @@ class VerificationActivity: Activity() {
                 "restart" -> if(current.info?.nextRequirement?.facial != null) startLiveness(current) else render()
                 "reenter_code" -> { current.codeDraft = ""; render() }
                 "new_code" -> {
-                    val destination = channel?.let { current.destinations[it] }
+                    val destination = channel?.let { current.codeTarget(it) }
                     if(channel != null && destination != null) sendCode(current, channel, ContactCodes.normalize(channel, destination) ?: destination) else render()
                 }
                 "leave" -> result(VerificationResult.HOST_ACTION_REQUIRED, screen.code)
@@ -465,7 +469,7 @@ class VerificationActivity: Activity() {
                     }
                 }
                 else -> field().apply {
-                    setText(value as? String); contentDescription = question.label
+                    setText(Questionnaire.display(value)); contentDescription = question.label
                     inputType = when(question.type) {
                         "email" -> android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
                         "phone", "tel" -> android.text.InputType.TYPE_CLASS_PHONE
@@ -569,7 +573,7 @@ class VerificationActivity: Activity() {
             })
         } as Button
         val resend = button(copy(Key.CONTACT_CODE_RESEND), primary = false, enabled = current.canResend(channel, now())) {
-            (current.codeDestination ?: current.destinations[channel])?.let { sendCode(current, channel, ContactCodes.normalize(channel, it) ?: it) }
+            current.codeTarget(channel)?.let { sendCode(current, channel, ContactCodes.normalize(channel, it) ?: it) }
         } as Button
         val wait = small("")
         countdown(current, channel, resend, wait, resend = true)
