@@ -79,6 +79,35 @@ class RefreshTest {
     }
 
     @Test
+    fun aConflictShowsTheReceiptWithoutFetchingTheSessionAgain() {
+        val flow = launch("closed-offline")
+        flow.answers += answers
+        val error = try { flow.sendAnswers(flow.info!!.questionnaire, "Acme"); null } catch(error: CredflareException) { error }
+        assertEquals(409, error!!.status)
+        assertTrue(flow.recoverClosed(error))
+        assertFalse(flow.pendingReceipt)
+        assertFalse(flow.info!!.isOpen)
+        assertFalse(flow.info!!.outstanding)
+        val confirm = try { flow.confirmCode("phone", "123456", "Acme"); null } catch(error: CredflareException) { error }
+        assertEquals(409, confirm!!.status)
+        assertTrue(flow.recoverClosed(confirm))
+        assertFalse(flow.pendingReceipt)
+        assertFalse(flow.info!!.isOpen)
+    }
+
+    @Test
+    fun theServerAnswerWinsOverTheOneSentFromThisDevice() {
+        val flow = launch("earlier-answers")
+        flow.answers += answers
+        flow.sendAnswers(flow.info!!.questionnaire, "Acme")
+        assertEquals("Student", flow.earlier["employment"])
+        flow.refresh()
+        val questionnaire = flow.info!!.questionnaire
+        assertEquals(listOf("employer"), questionnaire.visible(flow.answers, flow.earlier).map { it.key })
+        assertTrue(questionnaire.errors(flow.answers, flow.earlier).containsKey("employer"))
+    }
+
+    @Test
     fun anEditedRetryGetsANewKey() {
         val flow = launch("flaky")
         flow.info = SessionInfo.fromJson(ContractServer.fixture("questionnaire-session.json").getJSONObject("data"))

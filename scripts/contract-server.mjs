@@ -26,6 +26,8 @@ const server = createServer(async (req,res) => {
  if (token === 'Bearer unauthorized') return send(401,'unauthorized');
  const rejection = token?.match(/^Bearer reject:([a-z_.]+)$/)?.[1];
  if (token === 'Bearer closed-submit' && (req.method === 'POST' || answered.has(token))) {answered.add(token);return send(409,'session-closed');}
+ if (token === 'Bearer closed-offline' && req.method === 'POST') {answered.add(token);return send(409,'session-closed');}
+ if (token === 'Bearer closed-offline' && answered.has(token)) return req.socket.destroy();
  if (rejection && (req.url.endsWith('/submit') || /-codes(\/confirm)?$/.test(req.url))) return send(422,'rejections/'+rejection);
  if (token === 'Bearer resend-with-time' && /-codes$/.test(req.url)) return send(422,'rejections/phone.resend_too_soon');
  if (token === 'Bearer closes' && req.method === 'GET' && answered.has(token)) return send(409,'session-closed');
@@ -53,7 +55,8 @@ const server = createServer(async (req,res) => {
   if (text.includes('"form_submission"')) {answered.add(token);submits[submits.length-1].fields=JSON.parse(text).fields;return JSON.parse(text).fields.employer !== undefined && JSON.parse(text).fields.employment !== 'Employed' ? send(422,'questionnaire-hidden-answer') : send(201,'questionnaire-submission');}
   return send(201,'submission');
  }
- if (token==='Bearer questionnaire' || token==='Bearer closed-submit' || token==='Bearer refresh-fails' || token==='Bearer closes') return send(200,answered.has(token)?'requirement-added-session':'questionnaire-session');
+ if (token==='Bearer earlier-answers') return send(200,answered.has(token)?'questionnaire-earlier-answers-session':'questionnaire-session');
+ if (token==='Bearer questionnaire' || token==='Bearer closed-submit' || token==='Bearer closed-offline' || token==='Bearer refresh-fails' || token==='Bearer closes') return send(200,answered.has(token)?'requirement-added-session':'questionnaire-session');
  return send(200,token==='Bearer selfie'?'facial-session':token==='Bearer capture'?'capture-session':'capture-snapshot-or-upload');
 });
 server.listen(Number(process.env.PORT || 0),'127.0.0.1',()=>console.log(server.address().port));

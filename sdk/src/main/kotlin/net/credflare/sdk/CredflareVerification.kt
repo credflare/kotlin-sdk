@@ -115,10 +115,11 @@ object CredflareVerification {
         private fun liveRequest(channel: String, wallClock: Long) = codeRequest?.takeIf { it.channel == channel && (IsoTime.parse(it.expiresAt)?.time ?: 0L) > wallClock }
         fun codeTarget(channel: String) = if(codeChannel == channel) codeDestination else destinations[channel]
         fun recoverClosed(error: CredflareException): Boolean {
-            if(error.status != 409 || client == null || info == null) return false
-            refresh()
+            if(error.status != 409 || info == null) return false
+            info = closed(info!!); pendingReceipt = false
             return true
         }
+        private fun closed(info: SessionInfo) = info.copy(status = "closed", documents = emptyList(), requirements = emptyList(), questionnaire = Questionnaire(emptyList()))
         fun changeDestination() { codeChannel = null; changeAfter = false }
         fun confirmCode(channel: String, code: String, verifier: String) {
             try { client!!.confirmCode(channel, code) }
@@ -145,7 +146,7 @@ object CredflareVerification {
             info = try { client!!.get() }
             catch(error: CredflareException) {
                 if(error.status != 409) throw RefreshFailed(error)
-                info!!.copy(status = "closed", documents = emptyList(), requirements = emptyList(), questionnaire = Questionnaire(emptyList()))
+                closed(info!!)
             }
             catch(error: Exception) { throw RefreshFailed(error) }
             pendingReceipt = false

@@ -28,7 +28,7 @@ class Questionnaire(val questions: List<Question>, val earlier: Map<String, Any?
 
     fun visible(answers: Map<String, Any?>, earlier: Map<String, Any?> = emptyMap()): List<Question> {
         val asked = questions.map { it.key }.toSet()
-        val given = (this.earlier + earlier).filterKeys { it !in asked }.toMutableMap()
+        val given = (earlier + this.earlier).filterKeys { it !in asked }.toMutableMap()
         val shown = mutableListOf<Question>()
         for(question in questions) {
             if(!Conditions.visible(question.showIf, given)) continue
