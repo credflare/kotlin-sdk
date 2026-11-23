@@ -19,7 +19,7 @@ class MainActivity: Activity() {
         page.addView(Button(this).apply {
             text="Start verification"; isAllCaps=false
             setOnClickListener {
-                CredflareVerification.launch(this@MainActivity,SessionProvider {
+                CredflareVerification.launchWithOutcome(this@MainActivity,SessionProvider {
                     val connection=URL(demoUrl+"/session").openConnection() as HttpURLConnection
                     connection.connectTimeout=30000; connection.readTimeout=30000; connection.instanceFollowRedirects=false
                     connection.requestMethod="POST"; connection.doOutput=true
@@ -30,7 +30,7 @@ class MainActivity: Activity() {
                         require(connection.responseCode == 200) { "The local demo backend could not create a session." }
                         SessionDescriptor.fromJson(JSONObject(connection.inputStream.bufferedReader().use { it.readText() }))
                     } finally { connection.disconnect() }
-                }) { result -> status.text=when(result) { VerificationResult.SUBMITTED -> "Evidence received for review."; VerificationResult.CANCELLED -> "Verification closed."; VerificationResult.HOST_ACTION_REQUIRED -> "Return to your app for the remaining checks."; VerificationResult.FAILED -> "Restart verification from this app." } }
+                }) { outcome -> status.text=when(outcome.result) { VerificationResult.SUBMITTED -> "Evidence received for review."; VerificationResult.CANCELLED -> "Verification closed."; VerificationResult.HOST_ACTION_REQUIRED -> "Return to your app for the remaining checks."; VerificationResult.FAILED -> "Restart verification from this app." } }
             }
         })
         page.addView(status)

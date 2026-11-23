@@ -60,7 +60,7 @@ class VerificationActivity: Activity() {
             photoUri?.let { revokeUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
             photoFile?.delete()
             flow?.liveness?.video?.delete()
-            flow?.let { current -> if(CredflareVerification.active.compareAndSet(current, null)) current.result(VerificationResult.CANCELLED) }
+            flow?.let { current -> if(CredflareVerification.active.compareAndSet(current, null)) current.leaveResult.let { current.result(it.result, it.rejectionCode) } }
         }
     }
     private fun result(value: VerificationResult, rejectionCode: String? = null) {
@@ -74,7 +74,7 @@ class VerificationActivity: Activity() {
         val info = current.info
         if(info != null && !current.pendingReceipt && current.rejection == null && (!info.isOpen || info.documents.isEmpty()) && !info.asksQuestions && info.nextRequirement == null) { result(if(info.needsHostSteps) VerificationResult.HOST_ACTION_REQUIRED else VerificationResult.SUBMITTED); return }
         AlertDialog.Builder(this).setTitle(copy(Key.EXIT_TITLE)).setMessage(copy(Key.EXIT_BODY))
-            .setNegativeButton(copy(Key.EXIT_STAY), null).setPositiveButton(copy(Key.EXIT_LEAVE)) { _, _ -> result(VerificationResult.CANCELLED) }.show()
+            .setNegativeButton(copy(Key.EXIT_STAY), null).setPositiveButton(copy(Key.EXIT_LEAVE)) { _, _ -> current.leaveResult.let { result(it.result, it.rejectionCode) } }.show()
     }
 
     private fun add(view: View, top: Int = T.SPACING_SM): View {
@@ -361,7 +361,7 @@ class VerificationActivity: Activity() {
                 "reenter_code" -> { current.codeDraft = ""; render() }
                 "new_code" -> {
                     val destination = channel?.let { current.destinations[it] }
-                    if(channel != null && destination != null) sendCode(current, channel, destination) else render()
+                    if(channel != null && destination != null) sendCode(current, channel, ContactCodes.normalize(channel, destination) ?: destination) else render()
                 }
                 "leave" -> result(VerificationResult.HOST_ACTION_REQUIRED, screen.code)
                 else -> render()
@@ -389,12 +389,13 @@ class VerificationActivity: Activity() {
     private var focusKey: String? = null
     private fun questions(current: CredflareVerification.Launch, questionnaire: Questionnaire) {
         title(copy(Key.QUESTIONS_TITLE)); body(copy(Key.QUESTIONS_BODY))
-        val shown = questionnaire.visible(current.answers)
-        val keys = shown.map { it.key }
+        val all = questionnaire.visible(current.answers, current.earlier)
+        val shown = all.takeWhile { it.supported }
+        val keys = all.map { it.key }
         fun changed(key: String, value: Any?) {
             current.answers[key] = value
             current.answerErrors = current.answerErrors - key
-            if(questionnaire.visible(current.answers).map { it.key } != keys) { focusKey = key; page.post { render() } }
+            if(questionnaire.visible(current.answers, current.earlier).map { it.key } != keys) { focusKey = key; page.post { render() } }
         }
         var focus: View? = null
         for(question in shown) {
@@ -402,7 +403,7 @@ class VerificationActivity: Activity() {
             if(question.type != "consent") label.addView(ui.text(question.label, T.TYPE_LABEL).apply { gravity = Gravity.START; textAlignment = View.TEXT_ALIGNMENT_VIEW_START })
             if(!question.required) label.addView(ui.text(copy(Key.QUESTIONS_OPTIONAL), T.TYPE_SMALL, ui.palette.muted).apply { gravity = Gravity.START; textAlignment = View.TEXT_ALIGNMENT_VIEW_START })
             add(label, T.SPACING_LG)
-            val value = current.answers[question.key]
+            val value = questionnaire.answer(question.key, current.answers)
             val input: View = when(question.type) {
                 "single_select", "select" -> RadioGroup(this).apply {
                     question.options.forEach { option -> addView(RadioButton(this@VerificationActivity).apply { text = option; id = View.generateViewId(); isChecked = value == option; setTextColor(ui.color(ui.palette.ink)); buttonTintList = choiceTint(); setOnCheckedChangeListener { _, checked -> if(checked) changed(question.key, option) } }) }
@@ -414,7 +415,7 @@ class VerificationActivity: Activity() {
                     val selected = (value as? List<*>).orEmpty()
                     question.options.forEach { option -> addView(CheckBox(this@VerificationActivity).apply {
                         text = option; isChecked = option in selected; setTextColor(ui.color(ui.palette.ink)); buttonTintList = choiceTint()
-                        setOnCheckedChangeListener { _, checked -> val now = (current.answers[question.key] as? List<*>).orEmpty().filterIsInstance<String>(); changed(question.key, if(checked) question.options.filter { it in now || it == option } else now - option) }
+                        setOnCheckedChangeListener { _, checked -> val now = (questionnaire.answer(question.key, current.answers) as? List<*>).orEmpty().filterIsInstance<String>(); changed(question.key, if(checked) question.options.filter { it in now || it == option } else now - option) }
                     }) }
                 }
                 "consent" -> CheckBox(this).apply { text = question.label; isChecked = value == true; setTextColor(ui.color(ui.palette.ink)); buttonTintList = choiceTint(); setOnCheckedChangeListener { _, checked -> changed(question.key, checked) } }
@@ -426,14 +427,14 @@ class VerificationActivity: Activity() {
                     setSelection(codes.indexOf(value as? String) + 1, false)
                     contentDescription = question.label
                     onItemSelectedListener = object: AdapterView.OnItemSelectedListener {
-                        override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) { val code = if(position == 0) null else codes[position - 1]; if(code != current.answers[question.key]) changed(question.key, code) }
+                        override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) { val code = if(position == 0) null else codes[position - 1]; if(code != questionnaire.answer(question.key, current.answers)) changed(question.key, code) }
                         override fun onNothingSelected(parent: AdapterView<*>?) {}
                     }
                 }
                 "date" -> field().apply {
                     setText(value as? String); isFocusable = false; contentDescription = question.label
                     setOnClickListener {
-                        val parts = (current.answers[question.key] as? String)?.split('-')?.mapNotNull { it.toIntOrNull() }?.takeIf { it.size == 3 }
+                        val parts = (questionnaire.answer(question.key, current.answers) as? String)?.split('-')?.mapNotNull { it.toIntOrNull() }?.takeIf { it.size == 3 }
                         val today = java.util.Calendar.getInstance()
                         android.app.DatePickerDialog(this@VerificationActivity, { _, y, m, d -> val date = String.format(Locale.ROOT, "%04d-%02d-%02d", y, m + 1, d); setText(date); changed(question.key, date) },
                             parts?.get(0) ?: today.get(java.util.Calendar.YEAR), (parts?.get(1) ?: (today.get(java.util.Calendar.MONTH) + 1)) - 1, parts?.get(2) ?: today.get(java.util.Calendar.DAY_OF_MONTH)).show()
@@ -462,8 +463,13 @@ class VerificationActivity: Activity() {
         }
         focus?.let { view -> view.requestFocus(); (view as? EditText)?.let { it.setSelection(it.text.length) } }
         focusKey = null
+        if(shown.size < all.size) {
+            body(copy(Key.RECEIPT_HOST_STEPS), muted = false)
+            button(copy(Key.COMMON_RETURN_TO_APP)) { result(VerificationResult.HOST_ACTION_REQUIRED) }
+            return
+        }
         button(copy(Key.QUESTIONS_SEND)) {
-            current.answerErrors = questionnaire.errors(current.answers)
+            current.answerErrors = questionnaire.errors(current.answers, current.earlier)
             if(current.answerErrors.isNotEmpty()) { render(); return@button }
             work(copy(Key.QUESTIONS_SENDING), Key.ERRORS_SEND_ANSWERS_FAILED, {
                 current.sendAnswers(questionnaire, verifier)
@@ -478,11 +484,12 @@ class VerificationActivity: Activity() {
     private fun sendCode(current: CredflareVerification.Launch, channel: String, destination: String) =
         work(copy(Key.CONTACT_CODE_SENDING), Key.ERRORS_SEND_CODE_FAILED, { current.requestCode(channel, destination, verifier, now()) })
 
-    private fun countdown(current: CredflareVerification.Launch, action: Button, wait: View) {
+    private fun countdown(current: CredflareVerification.Launch, channel: String, action: Button, wait: View, resend: Boolean) {
         val tick = object: Runnable {
             override fun run() {
-                val left = current.resendIn(now())
-                action.isEnabled = left == 0L; action.alpha = if(left == 0L) 1f else 0.5f
+                val left = current.resendIn(channel, now())
+                val ready = if(resend) current.canResend(channel, now()) else left == 0L
+                action.isEnabled = ready; action.alpha = if(ready) 1f else 0.5f
                 (wait as TextView).text = if(left == 0L) "" else copy(Key.CONTACT_CODE_RESEND_IN, "seconds" to (left + 999) / 1000)
                 wait.visibility = if(left == 0L) View.GONE else View.VISIBLE
                 if(left > 0) ticker.postDelayed(this, 1000)
@@ -493,8 +500,9 @@ class VerificationActivity: Activity() {
 
     private fun contact(current: CredflareVerification.Launch, channel: String) {
         val email = channel == "email"
-        val request = current.codeRequest?.takeIf { current.codeChannel == channel }
-        if(request == null) {
+        val request = current.codeRequest?.takeIf { it.channel == channel }
+        val destination = request?.destination ?: current.codeDestination
+        if(current.codeChannel != channel || destination == null) {
             title(copy(if(email) Key.EMAIL_TITLE else Key.PHONE_TITLE)); body(copy(if(email) Key.EMAIL_BODY else Key.PHONE_BODY))
             add(ui.text(copy(if(email) Key.EMAIL_LABEL else Key.PHONE_LABEL), T.TYPE_LABEL).apply { gravity = Gravity.START; textAlignment = View.TEXT_ALIGNMENT_VIEW_START }, T.SPACING_LG)
             val input = field().apply {
@@ -510,11 +518,11 @@ class VerificationActivity: Activity() {
                 if(value == null) { current.error = copy(if(email) Key.EMAIL_INVALID else Key.PHONE_INVALID); render(); return@button }
                 sendCode(current, channel, value)
             } as Button
-            countdown(current, send, small(""))
+            countdown(current, channel, send, small(""), resend = false)
             return
         }
         title(copy(Key.CONTACT_CODE_TITLE))
-        body(copy(Key.CONTACT_CODE_BODY, "destination" to request.destination, "minutes" to CredflareSpec.Requirements.CONTACT_CODES_TTL_MINUTES))
+        body(copy(Key.CONTACT_CODE_BODY, "destination" to destination, "minutes" to CredflareSpec.Requirements.CONTACT_CODES_TTL_MINUTES))
         add(ui.text(copy(Key.CONTACT_CODE_LABEL), T.TYPE_LABEL).apply { gravity = Gravity.START; textAlignment = View.TEXT_ALIGNMENT_VIEW_START }, T.SPACING_LG)
         val length = CredflareSpec.Requirements.CONTACT_CODES_CODE_LENGTH
         lateinit var confirm: Button
@@ -536,13 +544,13 @@ class VerificationActivity: Activity() {
                 current.refresh()
             })
         } as Button
-        val resend = button(copy(Key.CONTACT_CODE_RESEND), primary = false, enabled = current.resendIn(now()) == 0L) {
+        val resend = button(copy(Key.CONTACT_CODE_RESEND), primary = false, enabled = current.canResend(channel, now())) {
             current.destinations[channel]?.let { sendCode(current, channel, ContactCodes.normalize(channel, it) ?: it) }
         } as Button
         val wait = small("")
-        countdown(current, resend, wait)
-        small(copy(Key.CONTACT_CODE_SENDS_REMAINING, "count" to request.sendsRemaining))
-        button(copy(if(email) Key.EMAIL_CHANGE else Key.PHONE_CHANGE), primary = false) { current.codeRequest = null; current.codeChannel = null; current.codeDraft = ""; current.error = null; render() }
+        countdown(current, channel, resend, wait, resend = true)
+        request?.let { small(copy(Key.CONTACT_CODE_SENDS_REMAINING, "count" to it.sendsRemaining)) }
+        button(copy(if(email) Key.EMAIL_CHANGE else Key.PHONE_CHANGE), primary = false) { current.changeDestination(); current.error = null; render() }
         if(current.codeDraft.isEmpty()) code.requestFocus()
     }
 

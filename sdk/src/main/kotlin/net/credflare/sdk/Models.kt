@@ -81,6 +81,12 @@ data class VerificationRequirement(val type: String, val facial: FacialSettings?
 }
 data class HelpContact(val email: String?, val url: String?)
 data class SessionInfo(val environment: String, val requesterName: String?, val maxFileSizeBytes: Long, val allowedFileTypes: List<String>, val documents: List<DocumentRequirement>, val requirements: List<VerificationRequirement> = emptyList(), val questionnaire: Questionnaire = Questionnaire(emptyList()), val hasProfile: Boolean = true, val status: String = "pending", val help: HelpContact = HelpContact(null, null)) {
+    @Deprecated("Pass the questionnaire from the session instead of a flag.")
+    constructor(environment: String, requesterName: String?, maxFileSizeBytes: Long, allowedFileTypes: List<String>, documents: List<DocumentRequirement>, requirements: List<VerificationRequirement>? = emptyList(), hasForms: Boolean, hasProfile: Boolean = true):
+        this(environment, requesterName, maxFileSizeBytes, allowedFileTypes, documents, requirements.orEmpty(), Questionnaire.flag(hasForms), hasProfile)
+    @Deprecated("Copy with a questionnaire instead of a flag.")
+    fun copy(environment: String = this.environment, requesterName: String? = this.requesterName, maxFileSizeBytes: Long = this.maxFileSizeBytes, allowedFileTypes: List<String> = this.allowedFileTypes, documents: List<DocumentRequirement> = this.documents, requirements: List<VerificationRequirement> = this.requirements, hasForms: Boolean, hasProfile: Boolean = this.hasProfile): SessionInfo =
+        copy(environment = environment, requesterName = requesterName, maxFileSizeBytes = maxFileSizeBytes, allowedFileTypes = allowedFileTypes, documents = documents, requirements = requirements, questionnaire = Questionnaire.flag(hasForms), hasProfile = hasProfile)
     val hasForms get() = questionnaire.questions.isNotEmpty()
     val isOpen get() = status in CredflareSpec.Requirements.REFRESH_OPEN_STATUSES
     val outstanding get() = isOpen && (documents.isNotEmpty() || requirements.isNotEmpty() || hasForms)
@@ -103,7 +109,7 @@ data class SessionInfo(val environment: String, val requesterName: String?, val 
             return SessionInfo(value.getString("environment"), requester, limits.getLong("max_file_size_bytes"), (0 until types.length()).map { types.getString(it).lowercase() },
                 (0 until docs.length()).map { DocumentRequirement.fromJson(docs.getJSONObject(it)) },
                 (0 until requirements.length()).map { VerificationRequirement.fromJson(requirements.getJSONObject(it)) },
-                Questionnaire.fromJson(profile?.optJSONArray("form_schema")), profile != null, value.optString("status").ifEmpty { "pending" }, HelpContact(contact("help_email"), helpUrl))
+                Questionnaire.fromJson(profile?.optJSONArray("form_schema"), profile?.optJSONObject("form_answers")), profile != null, value.optString("status").ifEmpty { "pending" }, HelpContact(contact("help_email"), helpUrl))
         }
     }
 }
@@ -142,6 +148,8 @@ data class LocationFix(val latitude: Double, val longitude: Double, val accuracy
         .put("metadata", JSONObject().put("accuracy", accuracy).put("altitude", altitude ?: JSONObject.NULL).put("fix_time", fixTime).put("is_mock", isMock ?: JSONObject.NULL).put("provider", provider ?: JSONObject.NULL).put("captured_at", capturedAt))
 }
 class CredflareException(val status: Int, message: String, cause: Throwable? = null, val code: String? = null, val resendAvailableAt: String? = null): Exception(message, cause) {
+    @Deprecated("Kept for compiled integrations.", level = DeprecationLevel.HIDDEN)
+    constructor(status: Int, message: String, cause: Throwable? = null, code: String? = null): this(status, message, cause, code, null)
     val type get() = when(status) { 0 -> "network"; 401 -> "session_unavailable"; 409 -> "verification_closed"; 422 -> "validation"; else -> "api" }
     val isKnownCode get() = code != null && code in CredflareSpec.ErrorCode.MEANINGS
     companion object {

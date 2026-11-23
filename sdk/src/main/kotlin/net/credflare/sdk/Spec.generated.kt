@@ -1,5 +1,5 @@
 // GENERATED FILE, DO NOT EDIT.
-// Source: credflare sdk-spec 1.1.0 (6824e65d1864). Regenerate with scripts/generate.mjs.
+// Source: credflare sdk-spec 1.1.0 (1489c6c1b827). Regenerate with scripts/generate.mjs.
 @file:Suppress("unused", "MemberVisibilityCanBePrivate")
 
 package net.credflare.sdk
@@ -71,7 +71,7 @@ data class SpecIcon(
 
 object CredflareSpec {
     const val VERSION: String = "1.1.0"
-    const val HASH: String = "6824e65d1864"
+    const val HASH: String = "1489c6c1b827"
 
     object Liveness {
         const val VERSION: Int = 1
@@ -616,6 +616,10 @@ object CredflareSpec {
             "questions.invalid_email" to "Enter a valid email address.",
             "questions.invalid_phone" to "Enter a valid phone number.",
             "questions.text_too_long" to "Use at most 5000 characters.",
+            "questions.founders_name" to "Founder name",
+            "questions.founders_add" to "Add a founder",
+            "questions.founders_remove" to "Remove",
+            "questions.founders_includes_me" to "I am one of the founders",
             "handoff.action" to "Continue on your phone",
             "handoff.title" to "Continue on your phone",
             "handoff.body" to "Scan this code with your phone camera to carry on there. The code works once and expires in {minutes} minutes.",
@@ -898,6 +902,10 @@ object CredflareSpec {
         const val QUESTIONS_INVALID_EMAIL: String = "questions.invalid_email"
         const val QUESTIONS_INVALID_PHONE: String = "questions.invalid_phone"
         const val QUESTIONS_TEXT_TOO_LONG: String = "questions.text_too_long"
+        const val QUESTIONS_FOUNDERS_NAME: String = "questions.founders_name"
+        const val QUESTIONS_FOUNDERS_ADD: String = "questions.founders_add"
+        const val QUESTIONS_FOUNDERS_REMOVE: String = "questions.founders_remove"
+        const val QUESTIONS_FOUNDERS_INCLUDES_ME: String = "questions.founders_includes_me"
         const val HANDOFF_ACTION: String = "handoff.action"
         const val HANDOFF_TITLE: String = "handoff.title"
         const val HANDOFF_BODY: String = "handoff.body"
@@ -1314,6 +1322,7 @@ object CredflareSpec {
         const val SHOW_IF_DEFAULT_MATCH: String = "all"
         const val SHOW_IF_MAX_CONDITIONS: Int = 10
         const val SHOW_IF_PATH_PREFIX: String = "form."
+        const val SHOW_IF_EARLIER_ANSWERS: String = "profile.form_answers"
         val SHOW_IF_OPERATORS: List<String> = listOf(
             "equals",
             "not_equals",

@@ -68,9 +68,75 @@ class QuestionnaireTest {
         assertEquals(listOf("a"), chained.visible(mapOf("a" to "no", "b" to "x")).map { it.key })
     }
 
+    private fun schema() = ContractServer.fixture("questionnaire-session.json").getJSONObject("data").getJSONObject("profile").getJSONArray("form_schema")
+    private fun question(key: String) = schema().let { all -> (0 until all.length()).map { all.getJSONObject(it) }.single { it.getString("key") == key } }
+
+    @Test
+    fun answersSentEarlierKeepLaterQuestionsShownWithoutBeingSentAgain() {
+        val refreshed = Questionnaire.fromJson(JSONArray().put(question("employer")))
+        assertEquals(emptyList<String>(), refreshed.visible(emptyMap()).map { it.key })
+        val earlier = mapOf<String, Any?>("employment" to "Employed")
+        assertEquals(listOf("employer"), refreshed.visible(emptyMap(), earlier).map { it.key })
+        assertEquals(SpecCopy.text(Key.QUESTIONS_REQUIRED), refreshed.errors(emptyMap(), earlier)["employer"])
+        assertEquals(setOf("employer"), refreshed.fields(mapOf("employer" to "First Bank"), earlier).keys().asSequence().toSet())
+        val askedAgain = Questionnaire.fromJson(JSONArray().put(question("employment")).put(question("employer")))
+        assertEquals(listOf("employment"), askedAgain.visible(mapOf("employment" to "Student"), earlier).map { it.key })
+    }
+
+    @Test
+    fun earlierAnswersFromTheSessionRevealQuestionsWithoutBeingSentAgain() {
+        val data = ContractServer.fixture("questionnaire-earlier-answers-session.json").getJSONObject("data")
+        val session = SessionInfo.fromJson(data)
+        val form = session.questionnaire
+        assertEquals(mapOf<String, Any?>("employment" to "Employed"), form.earlier)
+        assertTrue(session.asksQuestions)
+        assertEquals(listOf("employer"), form.visible(emptyMap()).map { it.key })
+        assertEquals(SpecCopy.text(Key.QUESTIONS_REQUIRED), form.errors(emptyMap())["employer"])
+        assertEquals(setOf("employer"), form.fields(mapOf("employer" to "First Bank")).keys().asSequence().toSet())
+
+        data.getJSONObject("profile").put("form_schema", JSONArray().put(question("employment")).put(question("employer")))
+        val askedAgain = SessionInfo.fromJson(data).questionnaire
+        assertEquals("Employed", askedAgain.answer("employment", emptyMap()))
+        assertEquals(listOf("employment", "employer"), askedAgain.visible(emptyMap()).map { it.key })
+        assertEquals(listOf("employment"), askedAgain.visible(mapOf("employment" to "Student")).map { it.key })
+        assertEquals("Employed", askedAgain.fields(mapOf("employer" to "First Bank")).getString("employment"))
+    }
+
+    @Test
+    fun showIfSeesTheValuesThatAreSent() {
+        val answers = complete + mapOf("employment" to "Self employed", "income" to " 9999999.123456789012345678901 ", "sources" to emptyList<String>())
+        val fields = questionnaire.fields(answers)
+        assertEquals("9999999.123456789012345678901", fields.get("income"))
+        assertFalse(fields.has("sources"))
+        assertEquals(questionnaire.submitted(answers), questionnaire.submitted(questionnaire.submitted(answers)))
+        assertEquals(null, questionnaire.errors(answers)["income"])
+        assertEquals("Enter at most 10000000.", questionnaire.errors(answers + ("income" to "10000000.0000000000000000001"))["income"])
+    }
+
+    @Test
+    fun onlyVisibleUnsupportedQuestionsSendTheFormBack() {
+        val unknown = org.json.JSONObject(question("employer").toString()).put("key", "signature").put("type", "signature")
+        val form = Questionnaire.fromJson(JSONArray().put(question("employment")).put(unknown))
+        assertTrue(form.supported)
+        assertTrue(form.supported(mapOf("employment" to "Student")))
+        assertFalse(form.supported(mapOf("employment" to "Employed")))
+    }
+
     @Test
     fun foundersQuestionsAreLeftToTheHostApp() {
         val founders = Questionnaire.fromJson(JSONArray("""[{"key":"founders","label":"Founders","type":"founders","required":true}]"""))
         assertFalse(founders.supported)
+    }
+
+    @Test
+    fun deprecatedFlagConstructorsKeepTheirMeaning() {
+        @Suppress("DEPRECATION") val flagged = SessionInfo("sandbox", null, 1L, listOf("pdf"), emptyList(), hasForms = true)
+        assertTrue(flagged.hasForms)
+        assertTrue(flagged.needsHostSteps)
+        assertFalse(flagged.asksQuestions)
+        @Suppress("DEPRECATION") val cleared = flagged.copy(hasForms = false)
+        assertFalse(cleared.hasForms)
+        assertFalse(cleared.needsHostSteps)
+        assertEquals(info.questionnaire, info.copy(requesterName = "Acme").questionnaire)
     }
 }

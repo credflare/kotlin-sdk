@@ -34,13 +34,16 @@ object CredflareVerification {
         var rejection: RejectionScreen? = null
         private val help get() = info?.help ?: HelpContact(null, null)
         val answers = mutableMapOf<String, Any?>()
+        val earlier = mutableMapOf<String, Any?>()
         var answerErrors: Map<String, String> = emptyMap()
         var answersKey = UUID.randomUUID()
         val destinations = mutableMapOf<String, String>()
         var codeChannel: String? = null
         var codeRequest: CodeRequest? = null
-        var resendAt = 0L
+        var codeDestination: String? = null
+        private val resendAt = mutableMapOf<String, Long>()
         var codeDraft = ""
+        val leaveResult get() = rejection?.takeIf { it.action == "leave" }?.let { VerificationOutcome(VerificationResult.HOST_ACTION_REQUIRED, it.code) } ?: VerificationOutcome(VerificationResult.CANCELLED)
 
         fun selectDocument(doc: DocumentRequirement) { document = doc; index = 0; captures.clear(); submitKey = UUID.randomUUID(); error = null }
         fun addCapture(step: CaptureStep, file: SelectedFile) { captures[step.id] = file; submitKey = UUID.randomUUID() }
@@ -78,23 +81,29 @@ object CredflareVerification {
             val sent = try { client!!.requestCode(channel, destination) }
             catch(error: CredflareException) {
                 val next = error.resendAvailableAt?.let { IsoTime.parse(it) }?.time
-                if(next != null) resendAt = now + (next - wallClock).coerceIn(0L, CredflareSpec.Requirements.CONTACT_CODES_RESEND_SECONDS * 1000L)
+                if(next != null) resendAt[channel] = now + (next - wallClock).coerceIn(0L, CredflareSpec.Requirements.CONTACT_CODES_RESEND_SECONDS * 1000L)
+                if(error.code == "$channel.resend_too_soon" && (codeChannel != channel || codeDestination != destination)) {
+                    codeRequest = null; codeChannel = channel; codeDestination = destination; codeDraft = ""
+                }
                 throw if(error.status == 422) Rejected(Rejections.screen(error, null, verifier, help)) else error
             }
-            codeRequest = sent; codeChannel = channel; resendAt = now + sent.resendDelayMillis; codeDraft = ""
+            codeRequest = sent; codeChannel = channel; codeDestination = destination; resendAt[channel] = now + sent.resendDelayMillis; codeDraft = ""
         }
+        fun changeDestination() { codeRequest = null; codeChannel = null; codeDestination = null; codeDraft = "" }
         fun confirmCode(channel: String, code: String, verifier: String) {
             try { client!!.confirmCode(channel, code) }
             catch(error: CredflareException) { throw if(error.status == 422) Rejected(Rejections.screen(error, null, verifier, help)) else error }
-            codeChannel = null; codeRequest = null; codeDraft = ""
+            changeDestination()
         }
-        fun resendIn(now: Long): Long = (resendAt - now).coerceAtLeast(0)
+        fun resendIn(channel: String, now: Long): Long = ((resendAt[channel] ?: 0L) - now).coerceAtLeast(0)
+        fun canResend(channel: String, now: Long) = resendIn(channel, now) == 0L && codeRequest?.takeIf { it.channel == channel }?.sendsRemaining != 0
         fun sendAnswers(questionnaire: Questionnaire, verifier: String) {
-            answerErrors = questionnaire.errors(answers)
+            answerErrors = questionnaire.errors(answers, earlier)
             if(answerErrors.isNotEmpty()) throw IllegalArgumentException(answerErrors.values.first())
-            try { client!!.submitAnswers(questionnaire.fields(answers), answersKey) }
+            val sent = questionnaire.submitted(answers, earlier)
+            try { client!!.submitAnswers(questionnaire.fields(answers, earlier), answersKey) }
             catch(error: CredflareException) { if(error.status == 422) { answersKey = UUID.randomUUID(); throw Rejected(Rejections.screen(error, null, verifier, help)) }; throw error }
-            answers.clear(); answersKey = UUID.randomUUID()
+            earlier += sent; answers.clear(); answersKey = UUID.randomUUID()
         }
         fun refresh() {
             pendingReceipt = true
@@ -115,6 +124,7 @@ object CredflareVerification {
     }
     internal val active = AtomicReference<Launch?>()
     @Volatile var faceSignalProvider: () -> FaceSignalProvider = { MlKitFaceSignalProvider() }
+    @Deprecated("The result alone cannot tell the host why it must act. Use launchWithOutcome, which also carries the rejection code.", ReplaceWith("launchWithOutcome(activity, provider) { onResult(it.result) }"))
     fun launch(activity: Activity, provider: SessionProvider, onResult: (VerificationResult) -> Unit): Boolean = launchWithOutcome(activity, provider) { onResult(it.result) }
     fun launchWithOutcome(activity: Activity, provider: SessionProvider, onOutcome: (VerificationOutcome) -> Unit): Boolean {
         val launch = Launch(provider, onOutcome)

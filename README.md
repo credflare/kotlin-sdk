@@ -8,14 +8,18 @@ Native Android collection of documents, a liveness challenge with selfie and vid
 import net.credflare.sdk.CredflareVerification
 import net.credflare.sdk.SessionProvider
 
-CredflareVerification.launch(activity, SessionProvider {
+CredflareVerification.launchWithOutcome(activity, SessionProvider {
     authenticatedBackend.createApplicantSession()
-}) { result ->
-    handleCollectionResult(result)
+}) { outcome ->
+    when(outcome.rejectionCode) {
+        CredflareSpec.ErrorCode.PHONE_NOT_CONFIGURED -> offerAnotherWayToConfirmThePhone()
+        CredflareSpec.ErrorCode.PHONE_SEND_LIMIT -> askToTryAgainTomorrow()
+        else -> handleCollectionResult(outcome.result)
+    }
 }
 ```
 
-The launcher returns false when a flow is already open. The provider runs on a worker thread and returns a `SessionDescriptor`. The host backend creates or resumes the correct verification case and returns its temporary descriptor. Closing the flow preserves the case. `SUBMITTED` confirms collection, `HOST_ACTION_REQUIRED` returns control for checks the SDK cannot collect, or when a rejection leaves nothing to do in the app, and `CANCELLED` closes the native interface. `launchWithOutcome()` reports the same result as a `VerificationOutcome`, whose `rejectionCode` names the rejection (for example `phone.not_configured`) when the applicant left from a screen with nothing left to do in the app, so the host app can offer another way. Receipts are separate from verification decisions.
+The launcher returns false when a flow is already open. The provider runs on a worker thread and returns a `SessionDescriptor`. The host backend creates or resumes the correct verification case and returns its temporary descriptor. Closing the flow preserves the case. `SUBMITTED` confirms collection, `HOST_ACTION_REQUIRED` returns control for checks the SDK cannot collect, or when a rejection leaves nothing to do in the app, and `CANCELLED` closes the native interface. The `VerificationOutcome` carries the result and a `rejectionCode` that names the rejection (for example `phone.not_configured`) when the applicant left a screen with nothing left to do in the app, by its button, the Close button or Back, so the host app can offer another way. `launch()` still reports the result alone and is deprecated because it drops that code. Receipts are separate from verification decisions.
 
 The flow supports camera photos, file selection, front/back steps, preview, replacement and explicit submission. Each document follows its backend capture rule: `upload`, `snapshot`, `snapshot_or_upload`, or `snapshot_and_upload`. Required document groups remain distinct from capture-source choices. Server file types and size limits are applied before upload and enforced again by the API.
 

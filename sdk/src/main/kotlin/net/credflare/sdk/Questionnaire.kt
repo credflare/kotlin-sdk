@@ -21,44 +21,69 @@ data class Question(val key: String, val label: String, val type: String, val re
     }
 }
 
-class Questionnaire(val questions: List<Question>) {
-    val supported get() = questions.all { it.supported }
+class Questionnaire(val questions: List<Question>, val earlier: Map<String, Any?> = emptyMap()) {
+    val supported get() = supported(emptyMap())
 
-    fun visible(answers: Map<String, Any?>): List<Question> {
-        val given = mutableMapOf<String, Any?>()
+    fun supported(answers: Map<String, Any?>, earlier: Map<String, Any?> = emptyMap()) = visible(answers, earlier).all { it.supported }
+
+    fun visible(answers: Map<String, Any?>, earlier: Map<String, Any?> = emptyMap()): List<Question> {
+        val asked = questions.map { it.key }.toSet()
+        val given = (this.earlier + earlier).filterKeys { it !in asked }.toMutableMap()
         val shown = mutableListOf<Question>()
         for(question in questions) {
             if(!Conditions.visible(question.showIf, given)) continue
             shown += question
-            normalized(question, answers[question.key])?.let { given[question.key] = it }
+            normalized(question, answer(question.key, answers))?.let { given[question.key] = it }
         }
         return shown
     }
 
-    fun errors(answers: Map<String, Any?>): Map<String, String> = visible(answers).mapNotNull { question -> error(question, answers[question.key])?.let { question.key to it } }.toMap()
+    fun errors(answers: Map<String, Any?>, earlier: Map<String, Any?> = emptyMap()): Map<String, String> = visible(answers, earlier).mapNotNull { question -> error(question, answer(question.key, answers))?.let { question.key to it } }.toMap()
 
-    fun fields(answers: Map<String, Any?>): JSONObject {
+    fun answer(key: String, answers: Map<String, Any?>): Any? = if(answers.containsKey(key)) answers[key] else earlier[key]
+
+    fun submitted(answers: Map<String, Any?>, earlier: Map<String, Any?> = emptyMap()): Map<String, Any?> =
+        visible(answers, earlier).mapNotNull { question -> normalized(question, answer(question.key, answers))?.let { question.key to it } }.toMap()
+
+    fun fields(answers: Map<String, Any?>, earlier: Map<String, Any?> = emptyMap()): JSONObject {
         val fields = JSONObject()
-        for(question in visible(answers)) normalized(question, answers[question.key])?.let { fields.put(question.key, if(it is List<*>) JSONArray(it) else it) }
+        for((key, value) in submitted(answers, earlier)) fields.put(key, json(value))
         return fields
     }
 
     companion object {
         private val EMAIL = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")
 
-        fun fromJson(schema: JSONArray?): Questionnaire = Questionnaire((0 until (schema?.length() ?: 0)).map { Question.fromJson(schema!!.getJSONObject(it)) })
+        private fun json(value: Any?): Any? = when(value) {
+            is List<*> -> JSONArray(value.map { json(it) })
+            is Map<*, *> -> JSONObject().apply { value.forEach { (k, v) -> put(k.toString(), json(v)) } }
+            else -> value
+        }
+
+        internal fun flag(hasForms: Boolean) = Questionnaire(if(hasForms) listOf(Question("", "", "", true)) else emptyList())
+
+        fun fromJson(schema: JSONArray?, earlier: JSONObject? = null): Questionnaire = Questionnaire((0 until (schema?.length() ?: 0)).map { Question.fromJson(schema!!.getJSONObject(it)) },
+            earlier?.let { Conditions.plain(it) as Map<*, *> }.orEmpty().mapKeys { it.key.toString() })
 
         private fun empty(value: Any?) = value == null || (value is String && value.isBlank()) || (value is List<*> && value.isEmpty())
 
         internal fun normalized(question: Question, value: Any?): Any? {
             if(question.type == "consent") return value == true
+            if(question.type == "founders") return founders(value)
             if(empty(value)) return null
             return when(question.type) {
-                "number" -> value.toString().trim().let { if(Regex(R.QUESTIONS_NUMBER_PATTERN).matches(it)) BigDecimal(it) else it }
+                "number" -> (if(value is BigDecimal) value.toPlainString() else value.toString()).trim()
                 "multi_select" -> (value as? List<*>)?.distinct() ?: listOf(value)
                 "country" -> value.toString().trim().uppercase()
                 else -> if(value is String) value.trim() else value
             }
+        }
+
+        private fun founders(value: Any?): Map<String, Any?>? {
+            val map = value as? Map<*, *> ?: return null
+            val includes = map["includes_applicant"] == true
+            val names = (map["names"] as? List<*>).orEmpty().map { it?.toString()?.trim().orEmpty() }.filter { it.isNotEmpty() }
+            return if(!includes && names.isEmpty()) null else mapOf("includes_applicant" to includes, "names" to names)
         }
 
         private fun realDate(value: String): Boolean {
@@ -76,9 +101,10 @@ class Questionnaire(val questions: List<Question>) {
             return when(question.type) {
                 "text", "textarea" -> if((answer as String).length > R.QUESTIONS_TEXT_MAX_LENGTH) SpecCopy.text(Key.QUESTIONS_TEXT_TOO_LONG) else null
                 "number" -> {
-                    if(answer !is BigDecimal) SpecCopy.text(Key.QUESTIONS_INVALID_NUMBER)
-                    else if(question.min != null && answer.toDouble() < question.min) SpecCopy.text(Key.QUESTIONS_NUMBER_MIN, "min" to plain(question.min))
-                    else if(question.max != null && answer.toDouble() > question.max) SpecCopy.text(Key.QUESTIONS_NUMBER_MAX, "max" to plain(question.max))
+                    val number = (answer as String).takeIf { Regex(R.QUESTIONS_NUMBER_PATTERN).matches(it) }?.let { BigDecimal(it) }
+                    if(number == null) SpecCopy.text(Key.QUESTIONS_INVALID_NUMBER)
+                    else if(question.min != null && number < BigDecimal(question.min)) SpecCopy.text(Key.QUESTIONS_NUMBER_MIN, "min" to plain(question.min))
+                    else if(question.max != null && number > BigDecimal(question.max)) SpecCopy.text(Key.QUESTIONS_NUMBER_MAX, "max" to plain(question.max))
                     else null
                 }
                 "date" -> if(!realDate(answer as String)) SpecCopy.text(Key.QUESTIONS_INVALID_DATE) else null

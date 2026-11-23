@@ -25,6 +25,8 @@ class RefreshTest {
         assertTrue(flow.info!!.asksQuestions)
         flow.answers += answers
         flow.sendAnswers(flow.info!!.questionnaire, "Acme")
+        assertEquals(mapOf("country" to "DE", "employment" to "Student", "birth_date" to "1990-05-17", "terms" to true), flow.earlier)
+        assertTrue(flow.answers.isEmpty())
         flow.refresh()
         val info = flow.info!!
         assertFalse(flow.pendingReceipt)

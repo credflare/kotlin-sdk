@@ -2,6 +2,7 @@ package net.credflare.sdk
 
 import org.junit.AfterClass
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.BeforeClass
@@ -46,9 +47,9 @@ class ContactCodeTest {
         val launch = CredflareVerification.Launch({ error("unused") }) {}
         launch.client = server.session("codes")
         launch.requestCode("phone", "+237650000001", "Acme", 1_000)
-        assertEquals(60_000L, launch.resendIn(1_000))
-        assertEquals(15_000L, launch.resendIn(46_000))
-        assertEquals(0L, launch.resendIn(61_000))
+        assertEquals(60_000L, launch.resendIn("phone", 1_000))
+        assertEquals(15_000L, launch.resendIn("phone", 46_000))
+        assertEquals(0L, launch.resendIn("phone", 61_000))
         assertEquals("+237650000001", launch.destinations["phone"])
     }
 
@@ -62,7 +63,7 @@ class ContactCodeTest {
         val wait = try { launch.requestCode("email", "jane@example.test", "Acme", 5_000, IsoTime.parse("2026-11-22T00:57:28.000Z")!!.time); null } catch(error: CredflareVerification.Rejected) { error.screen }
         assertEquals("wait", wait!!.action)
         assertEquals(request, launch.codeRequest)
-        assertEquals(55_000L, launch.resendIn(5_000))
+        assertEquals(55_000L, launch.resendIn("email", 5_000))
         launch.client = server.session("reject:email.code_invalid")
         val reenter = try { launch.confirmCode("email", "000000", "Acme"); null } catch(error: CredflareVerification.Rejected) { error.screen }
         assertEquals("reenter_code", reenter!!.action)
@@ -79,7 +80,55 @@ class ContactCodeTest {
         launch.client = server.session("resend-with-time")
         val wall = IsoTime.parse("2026-11-22T00:57:53.000Z")!!.time
         try { launch.requestCode("phone", "+237650000002", "Acme", 1_000, wall); throw AssertionError("not rejected") } catch(_: CredflareVerification.Rejected) {}
-        assertEquals(30_000L, launch.resendIn(1_000))
+        assertEquals(30_000L, launch.resendIn("phone", 1_000))
+    }
+
+    @Test
+    fun aResendTooSoonWithoutALocalRequestOpensTheCodeEntry() {
+        val launch = CredflareVerification.Launch({ error("unused") }) {}
+        launch.client = server.session("reject:phone.resend_too_soon")
+        val wall = IsoTime.parse("2026-11-22T00:57:43.000Z")!!.time
+        val screen = try { launch.requestCode("phone", "+237650000001", "Acme", 2_000, wall); null } catch(error: CredflareVerification.Rejected) { error.screen }
+        assertEquals("wait", screen!!.action)
+        assertNull(launch.codeRequest)
+        assertEquals("phone", launch.codeChannel)
+        assertEquals("+237650000001", launch.codeDestination)
+        assertEquals(40_000L, launch.resendIn("phone", 2_000))
+        assertFalse(launch.canResend("phone", 41_999))
+        assertTrue(launch.canResend("phone", 42_000))
+    }
+
+    @Test
+    fun resendStaysOffWhenNoSendsRemain() {
+        val launch = CredflareVerification.Launch({ error("unused") }) {}
+        launch.codeRequest = CodeRequest.fromJson(ContractServer.fixture("phone-code-request.json").getJSONObject("data").put("sends_remaining", 0))
+        launch.codeChannel = "phone"
+        assertFalse(launch.canResend("phone", Long.MAX_VALUE))
+        launch.codeRequest = CodeRequest.fromJson(ContractServer.fixture("phone-code-request.json").getJSONObject("data"))
+        assertTrue(launch.canResend("phone", Long.MAX_VALUE))
+    }
+
+    @Test
+    fun confirmingOneChannelDoesNotDelayTheNext() {
+        val launch = CredflareVerification.Launch({ error("unused") }) {}
+        launch.client = server.session("codes")
+        launch.requestCode("email", "jane@example.test", "Acme", 0)
+        launch.confirmCode("email", "123456", "Acme")
+        assertEquals(0L, launch.resendIn("phone", 5_000))
+        assertTrue(launch.canResend("phone", 5_000))
+        assertNull(launch.codeChannel)
+    }
+
+    @Test
+    fun closingALeaveScreenReportsItsCode() {
+        val launch = CredflareVerification.Launch({ error("unused") }) {}
+        assertEquals(VerificationOutcome(VerificationResult.CANCELLED), launch.leaveResult)
+        launch.client = server.session("reject:phone.send_limit")
+        launch.rejection = try { launch.requestCode("phone", "+237650000001", "Acme", 0); null } catch(error: CredflareVerification.Rejected) { error.screen }
+        assertEquals(VerificationOutcome(VerificationResult.HOST_ACTION_REQUIRED, "phone.send_limit"), launch.leaveResult)
+        launch.client = server.session("reject:phone.code_invalid")
+        launch.rejection = try { launch.confirmCode("phone", "000000", "Acme"); null } catch(error: CredflareVerification.Rejected) { error.screen }
+        assertEquals(VerificationOutcome(VerificationResult.CANCELLED), launch.leaveResult)
     }
 
     @Test
