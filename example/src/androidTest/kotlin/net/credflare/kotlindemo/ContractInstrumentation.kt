@@ -133,15 +133,39 @@ class ContractInstrumentation: Instrumentation() {
             check(form.submitAnswers(formInfo.questionnaire.fields(answers),UUID.randomUUID()) == 2)
             val added=form.get()
             check(added.outstanding && !added.asksQuestions && added.nextRequirement?.channel == "phone") { "Added requirement was not picked up" }
+            clearsReaskedOptionalAnswers(descriptor("reasked-optional"))
             session.cancel()
             check(!descriptor().toString().contains("test-session-token"))
             try { SessionDescriptor(UUID.randomUUID(),"test-token","http://example.test","2030-01-01"); error("Unsafe URL accepted") } catch(_: IllegalArgumentException) {}
-            output.putString(REPORT_KEY_STREAMRESULT,"PASS: native HTTP contract, capture rules, authentication, timeout, interrupted body, redirects, requirement settings, liveness challenge, gesture, video and selfie uploads, facial and location submissions, location rejections, every spec rejection code and its screen, email and phone codes, questionnaire answers and the requirement added after them, upload metadata and credential redaction")
+            output.putString(REPORT_KEY_STREAMRESULT,"PASS: native HTTP contract, capture rules, authentication, timeout, interrupted body, redirects, requirement settings, liveness challenge, gesture, video and selfie uploads, facial and location submissions, location rejections, every spec rejection code and its screen, email and phone codes, questionnaire answers and the requirement added after them, clearing a re-asked optional date and choice on screen, upload metadata and credential redaction")
             finish(Activity.RESULT_OK,output)
         } catch(error: Throwable) {
             output.putString(REPORT_KEY_STREAMRESULT,"FAIL: ${error.javaClass.simpleName}: ${error.message}")
             finish(Activity.RESULT_CANCELED,output)
         }
+    }
+    private fun clearsReaskedOptionalAnswers(descriptor: SessionDescriptor) {
+        val monitor=addMonitor(VerificationActivity::class.java.name,null,false)
+        val home=startActivitySync(android.content.Intent(targetContext,MainActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        runOnMainSync { check(CredflareVerification.launchWithOutcome(home,SessionProvider { descriptor }) {}) }
+        val screen=waitForMonitorWithTimeout(monitor,20000) ?: error("Verification screen did not open")
+        fun views(root: android.view.View): List<android.view.View> = listOf(root)+((root as? android.view.ViewGroup)?.let { group -> (0 until group.childCount).flatMap { views(group.getChildAt(it)) } } ?: emptyList())
+        fun buttons(label: String): List<android.widget.Button> { var found=emptyList<android.widget.Button>(); runOnMainSync { found=views(screen.window.decorView).filterIsInstance<android.widget.Button>().filter { it.text.toString() == label && it.isShown } }; return found }
+        fun waitFor(label: String): List<android.widget.Button> { repeat(100) { buttons(label).takeIf { it.isNotEmpty() }?.let { return it }; Thread.sleep(200) }; error("No $label button on screen") }
+        val remove=SpecCopy.text(CredflareSpec.CopyKey.QUESTIONS_FOUNDERS_REMOVE)
+        check(waitFor(remove).size == 2) { "Expected a clear action for the optional choice and date" }
+        repeat(2) { val button=buttons(remove).first(); runOnMainSync { button.performClick() }; waitForIdleSync() }
+        check(buttons(remove).isEmpty()) { "Cleared answers still offer the clear action" }
+        val before=JSONObject(URL(base.substringBefore("/api/v1")+"/stats").readText()).getJSONArray("submits").length()
+        val send=buttons(SpecCopy.text(CredflareSpec.CopyKey.QUESTIONS_SEND)).single()
+        runOnMainSync { send.performClick() }
+        var fields: JSONObject?=null
+        repeat(100) { if(fields == null) { val submits=JSONObject(URL(base.substringBefore("/api/v1")+"/stats").readText()).getJSONArray("submits"); if(submits.length() > before) fields=submits.getJSONObject(submits.length()-1).getJSONObject("fields") else Thread.sleep(200) } }
+        val sent=fields ?: error("Answers were not sent")
+        check(sent.has("employment") && sent.isNull("employment") && sent.has("birth_date") && sent.isNull("birth_date")) { "Cleared answers were not sent as null: $sent" }
+        check(sent.getString("country") == "DE" && sent.getBoolean("terms")) { "Kept answers changed: $sent" }
+        runOnMainSync { screen.finish(); home.finish() }
+        removeMonitor(monitor)
     }
     private fun faceProbe(path: String): String {
         val original=BitmapFactory.decodeFile(path) ?: return "FAIL: cannot read $path"

@@ -108,6 +108,19 @@ class RefreshTest {
     }
 
     @Test
+    fun aClearedOptionalAnswerAskedAgainIsSentAsNull() {
+        val flow = launch("reasked-optional")
+        val questionnaire = flow.info!!.questionnaire
+        assertEquals("1990-05-17", questionnaire.answer("birth_date", flow.answers))
+        flow.answers["birth_date"] = null
+        flow.answers["employment"] = null
+        flow.sendAnswers(questionnaire, "Acme")
+        val fields = server.stats().getJSONArray("submits").let { it.getJSONObject(it.length() - 1) }.getJSONObject("fields")
+        assertTrue(fields.has("birth_date") && fields.isNull("birth_date"))
+        assertTrue(fields.has("employment") && fields.isNull("employment"))
+    }
+
+    @Test
     fun anEditedRetryGetsANewKey() {
         val flow = launch("flaky")
         flow.info = SessionInfo.fromJson(ContractServer.fixture("questionnaire-session.json").getJSONObject("data"))

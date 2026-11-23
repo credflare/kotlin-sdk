@@ -401,10 +401,13 @@ class VerificationActivity: Activity() {
         val all = questionnaire.visible(current.answers, current.earlier)
         val shown = all.takeWhile { it.supported }
         val keys = all.map { it.key }
+        fun clearable(question: Question) = !question.required && question.type in listOf("single_select", "select", "date")
         fun changed(key: String, value: Any?) {
+            val before = questionnaire.answer(key, current.answers)
             current.answers[key] = value
             current.answerErrors = current.answerErrors - key
-            if(questionnaire.visible(current.answers, current.earlier).map { it.key } != keys) { focusKey = key; page.post { render() } }
+            val toggled = all.any { it.key == key && clearable(it) } && (before == null) != (value == null)
+            if(toggled || questionnaire.visible(current.answers, current.earlier).map { it.key } != keys) { focusKey = key; page.post { render() } }
         }
         var focus: View? = null
         for(question in shown) {
@@ -492,6 +495,7 @@ class VerificationActivity: Activity() {
                 }
             }
             add(input, T.SPACING_XS)
+            if(clearable(question) && value != null) button(copy(Key.QUESTIONS_FOUNDERS_REMOVE), primary = false) { changed(question.key, null) }
             current.answerErrors[question.key]?.let { add(ui.text(it, T.TYPE_SMALL, ui.palette.error).apply { gravity = Gravity.START; textAlignment = View.TEXT_ALIGNMENT_VIEW_START; accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }, T.SPACING_XXS) }
         }
         focus?.let { view -> view.requestFocus(); (view as? EditText)?.let { it.setSelection(it.text.length) } }

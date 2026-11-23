@@ -56,7 +56,13 @@ const server = createServer(async (req,res) => {
   return send(201,'submission');
  }
  if (token==='Bearer earlier-answers') return send(200,answered.has(token)?'questionnaire-earlier-answers-session':'questionnaire-session');
- if (token==='Bearer questionnaire' || token==='Bearer closed-submit' || token==='Bearer closed-offline' || token==='Bearer refresh-fails' || token==='Bearer closes') return send(200,answered.has(token)?'requirement-added-session':'questionnaire-session');
+ if (token==='Bearer reasked-optional' && !answered.has(token)) {
+  const session=JSON.parse(await readFile(join(fixtures,'questionnaire-session.json'),'utf8'));
+  for (const question of session.data.profile.form_schema) if (['employment','birth_date'].includes(question.key)) question.required=false;
+  session.data.profile.form_answers={country:'DE',employment:'Student',birth_date:'1990-05-17',terms:true};
+  res.writeHead(200,{'Content-Type':'application/json'});return res.end(JSON.stringify(session));
+ }
+ if (token==='Bearer questionnaire' || token==='Bearer closed-submit' || token==='Bearer closed-offline' || token==='Bearer refresh-fails' || token==='Bearer closes' || token==='Bearer reasked-optional') return send(200,answered.has(token)?'requirement-added-session':'questionnaire-session');
  return send(200,token==='Bearer selfie'?'facial-session':token==='Bearer capture'?'capture-session':'capture-snapshot-or-upload');
 });
 server.listen(Number(process.env.PORT || 0),'127.0.0.1',()=>console.log(server.address().port));
