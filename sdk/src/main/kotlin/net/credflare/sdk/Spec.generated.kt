@@ -1,5 +1,5 @@
 // GENERATED FILE, DO NOT EDIT.
-// Source: credflare sdk-spec 1.1.0 (eb176f038a44). Regenerate with scripts/generate.mjs.
+// Source: credflare sdk-spec 1.1.0 (0532d98b68cc). Regenerate with scripts/generate.mjs.
 @file:Suppress("unused", "MemberVisibilityCanBePrivate")
 
 package net.credflare.sdk
@@ -71,7 +71,7 @@ data class SpecIcon(
 
 object CredflareSpec {
     const val VERSION: String = "1.1.0"
-    const val HASH: String = "eb176f038a44"
+    const val HASH: String = "0532d98b68cc"
 
     object Liveness {
         const val VERSION: Int = 1
@@ -203,7 +203,6 @@ object CredflareSpec {
         )
         const val FACIAL_VERIFICATION_GESTURE_COUNT_DEFAULT: Int = 3
         const val FACIAL_VERIFICATION_RECORD_VIDEO_DEFAULT: Boolean = true
-        const val FACIAL_VERIFICATION_VIDEO_RETENTION_DAYS_DEFAULT: Int = 30
         const val LOCATION_VERIFICATION_MAX_ACCURACY_M_DEFAULT: Int = 100
         const val LOCATION_VERIFICATION_MAX_AGE_S_DEFAULT: Int = 60
         const val LOCATION_VERIFICATION_MOCK_LOCATION_DEFAULT: String = "reject"
@@ -241,15 +240,6 @@ object CredflareSpec {
                 max = null,
                 options = emptyList(),
                 defaultJson = "true",
-            ),
-            SpecSetting(
-                path = "facial_verification.video_retention_days",
-                type = "int",
-                optional = false,
-                min = 1.0,
-                max = 365.0,
-                options = emptyList(),
-                defaultJson = "30",
             ),
             SpecSetting(
                 path = "location_verification.max_accuracy_m",

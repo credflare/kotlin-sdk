@@ -18,7 +18,6 @@ class SettingsParsingTest {
         assertEquals(listOf("blink", "smile", "turn_left", "turn_right", "nod"), facial.gestures)
         assertEquals(3, facial.gestureCount)
         assertTrue(facial.recordVideo)
-        assertEquals(30, facial.videoRetentionDays)
         val location = info.requirements[1].location!!
         assertEquals(50, location.maxAccuracyM)
         assertEquals(60, location.maxAgeS)
@@ -27,7 +26,7 @@ class SettingsParsingTest {
         assertEquals(LocationReference("within", "any", listOf("Head office")), location.reference)
         assertTrue(info.requiresFacial && info.requiresLocation)
         assertFalse(info.needsHostSteps)
-        assertEquals("Mrs. Jakayla Kris's Workspace", info.requesterName)
+        assertEquals("Pauline Sipes's Workspace", info.requesterName)
     }
 
     @Test
@@ -39,6 +38,11 @@ class SettingsParsingTest {
         val location = LocationSettings.fromJson(null)
         assertEquals(CredflareSpec.Settings.LOCATION_VERIFICATION_MAX_ACCURACY_M_DEFAULT, location.maxAccuracyM)
         assertNull(location.reference)
+    }
+
+    @Test
+    fun ignoresSettingsKeysTheSdkDoesNotKnow() {
+        assertEquals(2, FacialSettings.fromJson(JSONObject("""{"gesture_count":2,"video_retention_days":30}""")).gestureCount)
     }
 
     @Test
