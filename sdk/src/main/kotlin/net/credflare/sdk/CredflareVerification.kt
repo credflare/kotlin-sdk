@@ -80,19 +80,26 @@ object CredflareVerification {
         }
         fun requestCode(channel: String, destination: String, verifier: String, now: Long, wallClock: Long = System.currentTimeMillis()) {
             destinations[channel] = destination
+            if(codeDestination == destination && resendIn(channel, now) > 0 && liveRequest(channel, wallClock) != null) { codeChannel = channel; changeAfter = false; return }
             val sent = try { client!!.requestCode(channel, destination) }
             catch(error: CredflareException) {
                 val next = error.resendAvailableAt?.let { IsoTime.parse(it) }?.time
                 if(next != null) resendAt[channel] = now + (next - wallClock).coerceIn(0L, CredflareSpec.Requirements.CONTACT_CODES_RESEND_SECONDS * 1000L)
                 if(error.code == "$channel.resend_too_soon") {
-                    val kept = codeRequest?.takeIf { it.channel == channel && (IsoTime.parse(it.expiresAt)?.time ?: 0L) > wallClock }
-                    if(kept != null) { changeAfter = codeDestination != destination; codeChannel = channel }
+                    val kept = liveRequest(channel, wallClock)
+                    if(kept != null && codeDestination != destination) {
+                        codeChannel = channel; changeAfter = true
+                        this.error = Rejections.screen(error, null, verifier, help).message
+                        return
+                    }
+                    if(kept != null) { changeAfter = false; codeChannel = channel }
                     else if(codeChannel != channel || codeDestination != destination) { codeRequest = null; codeChannel = channel; codeDestination = destination; codeDraft = ""; changeAfter = false }
                 }
                 throw if(error.status == 422) Rejected(Rejections.screen(error, null, verifier, help)) else error
             }
             codeRequest = sent; codeChannel = channel; codeDestination = destination; resendAt[channel] = now + sent.resendDelayMillis; codeDraft = ""; changeAfter = false
         }
+        private fun liveRequest(channel: String, wallClock: Long) = codeRequest?.takeIf { it.channel == channel && (IsoTime.parse(it.expiresAt)?.time ?: 0L) > wallClock }
         fun codeTarget(channel: String) = codeDestination?.takeIf { codeChannel == channel } ?: destinations[channel]
         fun recoverClosed(error: CredflareException): Boolean {
             if(error.status != 409 || client == null || info == null) return false

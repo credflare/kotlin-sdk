@@ -108,7 +108,9 @@ class ContactCodeTest {
         assertNull(launch.codeChannel)
         launch.client = server.session("reject:phone.resend_too_soon")
         val beforeExpiry = IsoTime.parse("2026-11-22T00:00:00.000Z")!!.time
-        try { launch.requestCode("phone", "+237650000002", "Acme", 1_000, beforeExpiry); throw AssertionError("not rejected") } catch(_: CredflareVerification.Rejected) {}
+        launch.requestCode("phone", "+237650000002", "Acme", 1_000, beforeExpiry)
+        assertNull(launch.rejection)
+        assertEquals(Rejections.screen(CredflareException.fromEnvelope(422, ContractServer.fixture("rejections/phone.resend_too_soon.json")), null, "Acme", HelpContact(null, null)).message, launch.error)
         assertEquals(request, launch.codeRequest)
         assertEquals("phone", launch.codeChannel)
         assertEquals("+237650000001", launch.codeDestination)
@@ -120,6 +122,37 @@ class ContactCodeTest {
         try { launch.requestCode("phone", "+237650000002", "Acme", 2_000, afterExpiry); throw AssertionError("not rejected") } catch(_: CredflareVerification.Rejected) {}
         assertNull(launch.codeRequest)
         assertEquals("+237650000002", launch.codeDestination)
+        assertFalse(launch.changeAfter)
+    }
+
+    @Test
+    fun aNewDestinationIsSentDuringTheCountdown() {
+        val launch = CredflareVerification.Launch({ error("unused") }) {}
+        launch.client = server.session("codes")
+        launch.requestCode("phone", "+237650000001", "Acme", 0)
+        launch.changeDestination()
+        val before = server.stats().getJSONArray("codes").length()
+        launch.requestCode("phone", "+237650000003", "Acme", 10_000)
+        val codes = server.stats().getJSONArray("codes")
+        assertEquals(before + 1, codes.length())
+        assertEquals("+237650000003", codes.getJSONObject(codes.length() - 1).getJSONObject("body").getString("phone"))
+        assertEquals("+237650000003", launch.codeDestination)
+    }
+
+    @Test
+    fun theSameDestinationDuringTheCountdownReopensItsCodeEntry() {
+        val launch = CredflareVerification.Launch({ error("unused") }) {}
+        launch.client = server.session("codes")
+        launch.requestCode("phone", "+237650000001", "Acme", 0)
+        val request = launch.codeRequest
+        launch.codeDraft = "12"
+        launch.changeDestination()
+        val before = server.stats().getJSONArray("codes").length()
+        launch.requestCode("phone", "+237650000001", "Acme", 10_000, IsoTime.parse("2026-11-22T00:00:00.000Z")!!.time)
+        assertEquals(before, server.stats().getJSONArray("codes").length())
+        assertEquals(request, launch.codeRequest)
+        assertEquals("phone", launch.codeChannel)
+        assertEquals("12", launch.codeDraft)
         assertFalse(launch.changeAfter)
     }
 

@@ -512,11 +512,11 @@ class VerificationActivity: Activity() {
     private fun sendCode(current: CredflareVerification.Launch, channel: String, destination: String) =
         work(copy(Key.CONTACT_CODE_SENDING), Key.ERRORS_SEND_CODE_FAILED, { current.requestCode(channel, destination, verifier, now()) })
 
-    private fun countdown(current: CredflareVerification.Launch, channel: String, action: Button, wait: View, resend: Boolean) {
+    private fun countdown(current: CredflareVerification.Launch, channel: String, action: Button, wait: View) {
         val tick = object: Runnable {
             override fun run() {
                 val left = current.resendIn(channel, now())
-                val ready = if(resend) current.canResend(channel, now()) else left == 0L
+                val ready = current.canResend(channel, now())
                 action.isEnabled = ready; action.alpha = if(ready) 1f else 0.5f
                 (wait as TextView).text = if(left == 0L) "" else copy(Key.CONTACT_CODE_RESEND_IN, "seconds" to (left + 999) / 1000)
                 wait.visibility = if(left == 0L) View.GONE else View.VISIBLE
@@ -540,13 +540,12 @@ class VerificationActivity: Activity() {
             }
             add(input, T.SPACING_XS)
             if(!email) small(copy(Key.PHONE_HINT))
-            val send = button(copy(if(email) Key.EMAIL_SEND else Key.PHONE_SEND)) {
+            button(copy(if(email) Key.EMAIL_SEND else Key.PHONE_SEND)) {
                 val value = ContactCodes.normalize(channel, input.text.toString())
                 current.destinations[channel] = input.text.toString()
                 if(value == null) { current.error = copy(if(email) Key.EMAIL_INVALID else Key.PHONE_INVALID); render(); return@button }
                 sendCode(current, channel, value)
-            } as Button
-            countdown(current, channel, send, small(""), resend = false)
+            }
             return
         }
         title(copy(Key.CONTACT_CODE_TITLE))
@@ -576,7 +575,7 @@ class VerificationActivity: Activity() {
             current.codeTarget(channel)?.let { sendCode(current, channel, ContactCodes.normalize(channel, it) ?: it) }
         } as Button
         val wait = small("")
-        countdown(current, channel, resend, wait, resend = true)
+        countdown(current, channel, resend, wait)
         request?.let { small(copy(Key.CONTACT_CODE_SENDS_REMAINING, "count" to it.sendsRemaining)) }
         if(current.changeAfter) small(copy(if(email) Key.EMAIL_CHANGE_AFTER else Key.PHONE_CHANGE_AFTER))
         button(copy(if(email) Key.EMAIL_CHANGE else Key.PHONE_CHANGE), primary = false) { current.changeDestination(); current.error = null; render() }
