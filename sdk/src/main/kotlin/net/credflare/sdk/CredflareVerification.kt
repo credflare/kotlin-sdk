@@ -88,12 +88,24 @@ object CredflareVerification {
                 if(next != null) resendAt[channel] = now + (next - wallClock).coerceIn(0L, CredflareSpec.Requirements.CONTACT_CODES_RESEND_SECONDS * 1000L)
                 if(error.code == "$channel.resend_too_soon") {
                     val kept = liveRequest(channel, wallClock)
-                    if(kept != null && codeDestination != destination) {
+                    val waiting = error.destination
+                    if(waiting != null) {
+                        val known = kept?.takeIf { it.destination == waiting }
+                        val target = if(known != null) codeDestination else destination.takeIf { ContactCodes.fits(waiting, it) }
+                        val request = CodeRequest(channel, waiting, error.expiresAt ?: known?.expiresAt ?: "", error.resendAvailableAt ?: known?.resendAvailableAt ?: "", error.sendsRemaining ?: known?.sendsRemaining ?: CredflareSpec.Requirements.CONTACT_CODES_MAX_SENDS)
+                        if(kept?.destination != waiting) codeDraft = ""
+                        codeRequest = request; codeChannel = channel; codeDestination = target
+                        if(target != destination) {
+                            changeAfter = true
+                            this.error = Rejections.screen(error, null, verifier, help).message
+                            return
+                        }
+                        changeAfter = false
+                    } else if(kept != null && codeDestination != destination) {
                         codeChannel = channel; changeAfter = true
                         this.error = Rejections.screen(error, null, verifier, help).message
                         return
-                    }
-                    if(kept != null) { changeAfter = false; codeChannel = channel }
+                    } else if(kept != null) { changeAfter = false; codeChannel = channel }
                     else if(codeChannel != channel || codeDestination != destination) { codeRequest = null; codeChannel = channel; codeDestination = destination; codeDraft = ""; changeAfter = false }
                 }
                 throw if(error.status == 422) Rejected(Rejections.screen(error, null, verifier, help)) else error
@@ -101,7 +113,7 @@ object CredflareVerification {
             codeRequest = sent; codeChannel = channel; codeDestination = destination; resendAt[channel] = now + sent.resendDelayMillis; codeDraft = ""; changeAfter = false
         }
         private fun liveRequest(channel: String, wallClock: Long) = codeRequest?.takeIf { it.channel == channel && (IsoTime.parse(it.expiresAt)?.time ?: 0L) > wallClock }
-        fun codeTarget(channel: String) = codeDestination?.takeIf { codeChannel == channel } ?: destinations[channel]
+        fun codeTarget(channel: String) = if(codeChannel == channel) codeDestination else destinations[channel]
         fun recoverClosed(error: CredflareException): Boolean {
             if(error.status != 409 || client == null || info == null) return false
             refresh()
@@ -115,7 +127,8 @@ object CredflareVerification {
         }
         fun resendIn(channel: String, now: Long): Long = ((resendAt[channel] ?: 0L) - now).coerceAtLeast(0)
         fun showsChangeAfter(channel: String, now: Long) = changeAfter && resendIn(channel, now) > 0
-        fun canResend(channel: String, now: Long) = resendIn(channel, now) == 0L && codeRequest?.takeIf { it.channel == channel }?.sendsRemaining != 0
+        fun canResend(channel: String, now: Long) = resendIn(channel, now) == 0L && codeRequest?.takeIf { it.channel == channel }?.sendsRemaining != 0 && (codeChannel != channel || codeDestination != null)
+        fun canChangeDestination(channel: String, wallClock: Long = System.currentTimeMillis()) = liveRequest(channel, wallClock)?.sendsRemaining != 0
         fun sendAnswers(questionnaire: Questionnaire, verifier: String) {
             answerErrors = questionnaire.errors(answers, earlier)
             if(answerErrors.isNotEmpty()) throw IllegalArgumentException(answerErrors.values.first())

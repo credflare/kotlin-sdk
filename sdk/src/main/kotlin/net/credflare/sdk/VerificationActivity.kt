@@ -584,7 +584,7 @@ class VerificationActivity: Activity() {
         request?.let { small(copy(Key.CONTACT_CODE_SENDS_REMAINING, "count" to it.sendsRemaining)) }
         val note = if(current.changeAfter) small(copy(if(email) Key.EMAIL_CHANGE_AFTER else Key.PHONE_CHANGE_AFTER)) else null
         countdown(current, channel, resend, wait, note)
-        button(copy(if(email) Key.EMAIL_CHANGE else Key.PHONE_CHANGE), primary = false) { current.changeDestination(); current.error = null; render() }
+        if(current.canChangeDestination(channel)) button(copy(if(email) Key.EMAIL_CHANGE else Key.PHONE_CHANGE), primary = false) { current.changeDestination(); current.error = null; render() }
         if(current.codeDraft.isEmpty()) code.requestFocus()
     }
 
