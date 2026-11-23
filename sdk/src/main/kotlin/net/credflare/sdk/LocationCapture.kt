@@ -18,6 +18,9 @@ internal object LocationCapture {
     fun ageSeconds(location: Location) = (SystemClock.elapsedRealtimeNanos() - location.elapsedRealtimeNanos) / 1_000_000_000.0
 
     fun fresh(hasAccuracy: Boolean, ageS: Double, settings: LocationSettings) = hasAccuracy && ageS <= settings.maxAgeS
+    fun permitted(fine: Boolean, coarse: Boolean) = fine || coarse
+    fun newer(timeMillis: Long, after: Long?) = after == null || timeMillis > after
+    fun providers(fine: Boolean, sdk: Int = Build.VERSION.SDK_INT) = if(fine || sdk >= 31) listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER) else listOf(LocationManager.NETWORK_PROVIDER)
     fun acceptable(hasAccuracy: Boolean, accuracyM: Float, ageS: Double, settings: LocationSettings) = fresh(hasAccuracy, ageS, settings) && accuracyM <= settings.maxAccuracyM
     fun acceptable(location: Location, settings: LocationSettings) = acceptable(location.hasAccuracy(), location.accuracy, ageSeconds(location), settings)
 
@@ -32,13 +35,14 @@ internal object LocationCapture {
         provider?.takeIf { it in listOf("gps", "network", "fused") }, capturedAt)
 
     @SuppressLint("MissingPermission")
-    fun acquire(context: Context, settings: LocationSettings, onAttempt: (Int) -> Unit): Location {
+    fun acquire(context: Context, settings: LocationSettings, after: Long? = null, onAttempt: (Int) -> Unit): Location {
         val manager = context.getSystemService(LocationManager::class.java) ?: throw LocationCaptureException(CredflareSpec.CopyKey.LOCATION_UNAVAILABLE)
-        val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER).filter { runCatching { manager.isProviderEnabled(it) }.getOrDefault(false) }
+        val fine = context.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val providers = providers(fine).filter { runCatching { manager.isProviderEnabled(it) }.getOrDefault(false) }
         if(providers.isEmpty()) throw LocationCaptureException(CredflareSpec.CopyKey.LOCATION_UNAVAILABLE)
         var best: Location? = null
         fun consider(location: Location?) {
-            if(location == null || !fresh(location.hasAccuracy(), ageSeconds(location), settings)) return
+            if(location == null || !newer(location.time, after) || !fresh(location.hasAccuracy(), ageSeconds(location), settings)) return
             if(best == null || location.accuracy < best!!.accuracy) best = location
         }
         providers.forEach { consider(runCatching { manager.getLastKnownLocation(it) }.getOrNull()) }

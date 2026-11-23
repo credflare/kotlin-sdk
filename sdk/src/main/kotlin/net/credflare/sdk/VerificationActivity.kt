@@ -334,12 +334,13 @@ class VerificationActivity: Activity() {
     }
 
     private fun shareLocation(current: CredflareVerification.Launch, settings: LocationSettings) {
-        if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+        if(!LocationCapture.permitted(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED, checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)) {
             requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 103); return
         }
         work(copy(Key.LOCATION_WAITING), Key.LOCATION_UNAVAILABLE, {
             try {
-                val location = LocationCapture.acquire(applicationContext, settings) { attempt -> if(attempt > 1) { current.busyMessage = copy(Key.LOCATION_WAITING_ACCURACY); current.changed?.invoke() } }
+                val location = LocationCapture.acquire(applicationContext, settings, current.lastFixTime) { attempt -> if(attempt > 1) { current.busyMessage = copy(Key.LOCATION_WAITING_ACCURACY); current.changed?.invoke() } }
+                current.lastFixTime = location.time
                 current.acceptLocation(LocationCapture.toFix(location))
             } catch(error: Exception) { current.locationFailures += 1; throw error }
         })
@@ -650,7 +651,7 @@ class VerificationActivity: Activity() {
             104 -> if(granted) startLiveness(current) else { current.error = copy(Key.ERRORS_CAMERA_DENIED); render() }
             103 -> {
                 val settings = current.info?.nextRequirement?.location ?: return
-                if(granted) shareLocation(current, settings) else { current.error = copy(Key.LOCATION_PERMISSION_DENIED); render() }
+                if(grantResults.any { it == PackageManager.PERMISSION_GRANTED }) shareLocation(current, settings) else { current.error = copy(Key.LOCATION_PERMISSION_DENIED); render() }
             }
         }
     }

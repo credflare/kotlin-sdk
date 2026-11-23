@@ -30,6 +30,7 @@ object CredflareVerification {
         var locationFix: LocationFix? = null
         var locationKey = UUID.randomUUID()
         var locationFailures = 0
+        var lastFixTime: Long? = null
         val received = mutableListOf<String>()
         var rejection: RejectionScreen? = null
         private val help get() = info?.help ?: HelpContact(null, null)

@@ -65,4 +65,22 @@ class LocationAcceptanceTest {
         assertNull(LocationCapture.fix(0.0, 0.0, 1f, null, 0, false, null).provider)
         assertEquals("1970-01-01T00:00:00.000Z", LocationCapture.fix(0.0, 0.0, 1f, null, 0, false, "gps").fixTime)
     }
+
+    @Test
+    fun approximateLocationAccessIsEnoughToTakeAReading() {
+        assertTrue(LocationCapture.permitted(fine = false, coarse = true))
+        assertTrue(LocationCapture.permitted(fine = true, coarse = false))
+        assertFalse(LocationCapture.permitted(fine = false, coarse = false))
+        assertEquals(listOf("gps", "network"), LocationCapture.providers(fine = true, sdk = 30))
+        assertEquals(listOf("network"), LocationCapture.providers(fine = false, sdk = 30))
+        assertEquals(listOf("gps", "network"), LocationCapture.providers(fine = false, sdk = 31))
+    }
+
+    @Test
+    fun aNewAttemptIgnoresTheReadingAlreadyTaken() {
+        assertTrue(LocationCapture.newer(1_795_221_600_000, null))
+        assertFalse(LocationCapture.newer(1_795_221_600_000, 1_795_221_600_000))
+        assertFalse(LocationCapture.newer(1_795_221_599_000, 1_795_221_600_000))
+        assertTrue(LocationCapture.newer(1_795_221_601_000, 1_795_221_600_000))
+    }
 }
