@@ -36,13 +36,13 @@ data class DocumentRequirement(val id: Int, val name: String, val policy: String
         }
     }
 }
-data class FacialSettings(val gestures: List<String>, val gestureCount: Int, val recordVideo: Boolean, val videoRetentionDays: Int) {
+data class FacialSettings(val gestures: List<String>, val gestureCount: Int, val recordVideo: Boolean, val videoRetentionDays: Int? = null) {
     companion object {
         fun fromJson(value: JSONObject?): FacialSettings = FacialSettings(
             value?.optJSONArray("gestures")?.let { array -> (0 until array.length()).map { array.getString(it) } } ?: CredflareSpec.Settings.FACIAL_VERIFICATION_GESTURES_DEFAULT,
             value?.optInt("gesture_count", CredflareSpec.Settings.FACIAL_VERIFICATION_GESTURE_COUNT_DEFAULT) ?: CredflareSpec.Settings.FACIAL_VERIFICATION_GESTURE_COUNT_DEFAULT,
             value?.optBoolean("record_video", CredflareSpec.Settings.FACIAL_VERIFICATION_RECORD_VIDEO_DEFAULT) ?: CredflareSpec.Settings.FACIAL_VERIFICATION_RECORD_VIDEO_DEFAULT,
-            value?.optInt("video_retention_days", CredflareSpec.Settings.FACIAL_VERIFICATION_VIDEO_RETENTION_DAYS_DEFAULT) ?: CredflareSpec.Settings.FACIAL_VERIFICATION_VIDEO_RETENTION_DAYS_DEFAULT)
+            (value?.opt("video_retention_days") as? Number)?.toInt())
     }
 }
 data class LocationReference(val rule: String, val match: String, val placeLabels: List<String>) {
