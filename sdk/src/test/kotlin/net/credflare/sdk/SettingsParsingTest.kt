@@ -18,7 +18,6 @@ class SettingsParsingTest {
         assertEquals(listOf("blink", "smile", "turn_left", "turn_right", "nod"), facial.gestures)
         assertEquals(3, facial.gestureCount)
         assertTrue(facial.recordVideo)
-        assertEquals(30, facial.videoRetentionDays)
         val location = info.requirements[1].location!!
         assertEquals(50, location.maxAccuracyM)
         assertEquals(60, location.maxAgeS)
@@ -36,17 +35,14 @@ class SettingsParsingTest {
         val facial = info.requirements.single().facial!!
         assertEquals(CredflareSpec.Settings.FACIAL_VERIFICATION_GESTURE_COUNT_DEFAULT, facial.gestureCount)
         assertEquals(CredflareSpec.Settings.FACIAL_VERIFICATION_GESTURES_DEFAULT, facial.gestures)
-        assertNull(facial.videoRetentionDays)
         val location = LocationSettings.fromJson(null)
         assertEquals(CredflareSpec.Settings.LOCATION_VERIFICATION_MAX_ACCURACY_M_DEFAULT, location.maxAccuracyM)
         assertNull(location.reference)
     }
 
     @Test
-    fun passesVideoRetentionDaysThroughOrLeavesThemNull() {
-        assertEquals(90, FacialSettings.fromJson(JSONObject("""{"video_retention_days":90}""")).videoRetentionDays)
-        assertNull(FacialSettings.fromJson(JSONObject("""{"video_retention_days":null}""")).videoRetentionDays)
-        assertNull(FacialSettings.fromJson(JSONObject()).videoRetentionDays)
+    fun ignoresSettingsKeysTheSdkDoesNotKnow() {
+        assertEquals(2, FacialSettings.fromJson(JSONObject("""{"gesture_count":2,"video_retention_days":30}""")).gestureCount)
     }
 
     @Test
