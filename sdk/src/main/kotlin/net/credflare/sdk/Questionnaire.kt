@@ -11,7 +11,7 @@ import net.credflare.sdk.CredflareSpec.Requirements as R
 data class Question(val key: String, val label: String, val type: String, val required: Boolean, val options: List<String> = emptyList(), val min: Double? = null, val max: Double? = null, val showIf: ShowIf? = null) {
     val supported get() = type in SUPPORTED
     companion object {
-        val SUPPORTED = R.QUESTIONS_TYPES - "founders"
+        val SUPPORTED = R.QUESTIONS_TYPES
         fun fromJson(value: JSONObject): Question {
             val options = value.optJSONArray("options") ?: JSONArray()
             fun number(name: String) = if(value.isNull(name)) null else value.optDouble(name).takeIf { !it.isNaN() }

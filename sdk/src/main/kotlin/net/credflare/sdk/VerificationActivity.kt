@@ -431,6 +431,30 @@ class VerificationActivity: Activity() {
                         override fun onNothingSelected(parent: AdapterView<*>?) {}
                     }
                 }
+                "founders" -> LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL; contentDescription = question.label
+                    fun state() = questionnaire.answer(question.key, current.answers) as? Map<*, *>
+                    fun includes() = state()?.get("includes_applicant") == true
+                    fun names() = (state()?.get("names") as? List<*>)?.map { it?.toString().orEmpty() }.orEmpty().ifEmpty { listOf("") }
+                    fun save(includes: Boolean, names: List<String>) = changed(question.key, mapOf("includes_applicant" to includes, "names" to names))
+                    addView(CheckBox(this@VerificationActivity).apply { text = copy(Key.QUESTIONS_FOUNDERS_INCLUDES_ME); isChecked = includes(); setTextColor(ui.color(ui.palette.ink)); buttonTintList = choiceTint(); setOnCheckedChangeListener { _, checked -> save(checked, names()) } })
+                    names().forEachIndexed { index, name ->
+                        val row = LinearLayout(this@VerificationActivity).apply { gravity = Gravity.CENTER_VERTICAL }
+                        row.addView(field().apply {
+                            setText(name); hint = copy(Key.QUESTIONS_FOUNDERS_NAME); contentDescription = copy(Key.QUESTIONS_FOUNDERS_NAME)
+                            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PERSON_NAME or android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS
+                            addTextChangedListener(object: android.text.TextWatcher {
+                                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+                                override fun afterTextChanged(s: android.text.Editable?) { save(includes(), names().toMutableList().also { it[index] = s?.toString().orEmpty() }) }
+                            })
+                            if(focusKey == "${question.key}:$index") focus = this
+                        }, LinearLayout.LayoutParams(0, -2, 1f))
+                        if(names().size > 1) row.addView(ui.button(copy(Key.QUESTIONS_FOUNDERS_REMOVE), false, true) { save(includes(), names().filterIndexed { i, _ -> i != index }); render() }, LinearLayout.LayoutParams(-2, -2))
+                        addView(row, LinearLayout.LayoutParams(-1, -2).apply { topMargin = ui.dp(T.SPACING_XS) })
+                    }
+                    addView(ui.button(copy(Key.QUESTIONS_FOUNDERS_ADD), false, true) { focusKey = "${question.key}:${names().size}"; save(includes(), names() + ""); render() }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = ui.dp(T.SPACING_SM) })
+                }
                 "date" -> field().apply {
                     setText(value as? String); isFocusable = false; contentDescription = question.label
                     setOnClickListener {

@@ -123,9 +123,15 @@ class QuestionnaireTest {
     }
 
     @Test
-    fun foundersQuestionsAreLeftToTheHostApp() {
+    fun foundersAnswersAreSentAsTheSpecPayload() {
         val founders = Questionnaire.fromJson(JSONArray("""[{"key":"founders","label":"Founders","type":"founders","required":true}]"""))
-        assertFalse(founders.supported)
+        assertTrue(founders.supported)
+        assertEquals(SpecCopy.text(Key.QUESTIONS_REQUIRED), founders.errors(mapOf("founders" to mapOf("includes_applicant" to false, "names" to listOf(" ", ""))))["founders"])
+        val answers = mapOf("founders" to mapOf("includes_applicant" to true, "names" to listOf(" Ada Obi ", "", "Ben Tah")))
+        assertEquals(emptyMap<String, String>(), founders.errors(answers))
+        val sent = founders.fields(answers).getJSONObject("founders")
+        assertEquals(true, sent.getBoolean("includes_applicant"))
+        assertEquals(listOf("Ada Obi", "Ben Tah"), sent.getJSONArray("names").let { n -> (0 until n.length()).map { n.getString(it) } })
     }
 
     @Test

@@ -23,7 +23,7 @@ The launcher returns false when a flow is already open. The provider runs on a w
 
 The flow supports camera photos, file selection, front/back steps, preview, replacement and explicit submission. Each document follows its backend capture rule: `upload`, `snapshot`, `snapshot_or_upload`, or `snapshot_and_upload`. Required document groups remain distinct from capture-source choices. Server file types and size limits are applied before upload and enforced again by the API.
 
-Camera source is client reported. The liveness challenge shows that the camera recorded a server chosen sequence in time; it does not prove a live person and does not detect deepfakes. Questions of the `founders` type and checks the SDK does not collect return control to the host app. Unsent evidence survives activity recreation in process memory; after process termination, restart from the host app. Tokens and evidence are not saved in preferences or diagnostic logs.
+Camera source is client reported. The liveness challenge shows that the camera recorded a server chosen sequence in time; it does not prove a live person and does not detect deepfakes. A shown question of a type the SDK does not know, and checks the SDK does not collect, return control to the host app. Unsent evidence survives activity recreation in process memory; after process termination, restart from the host app. Tokens and evidence are not saved in preferences or diagnostic logs.
 
 ## Session client
 
