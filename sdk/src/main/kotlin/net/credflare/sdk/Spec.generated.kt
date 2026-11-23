@@ -1,5 +1,5 @@
 // GENERATED FILE, DO NOT EDIT.
-// Source: credflare sdk-spec 1.1.0 (1489c6c1b827). Regenerate with scripts/generate.mjs.
+// Source: credflare sdk-spec 1.1.0 (eb176f038a44). Regenerate with scripts/generate.mjs.
 @file:Suppress("unused", "MemberVisibilityCanBePrivate")
 
 package net.credflare.sdk
@@ -71,7 +71,7 @@ data class SpecIcon(
 
 object CredflareSpec {
     const val VERSION: String = "1.1.0"
-    const val HASH: String = "1489c6c1b827"
+    const val HASH: String = "eb176f038a44"
 
     object Liveness {
         const val VERSION: Int = 1
@@ -583,6 +583,7 @@ object CredflareSpec {
             "email.send" to "Send code",
             "email.invalid" to "Enter a valid email address.",
             "email.change" to "Use a different email address",
+            "email.change_after" to "You can use a different email address when the countdown ends.",
             "phone.title" to "Confirm your phone number",
             "phone.body" to "{verifier} asks you to confirm a phone number. We will send a short code to it by text message.",
             "phone.label" to "Phone number",
@@ -590,6 +591,7 @@ object CredflareSpec {
             "phone.send" to "Send code",
             "phone.invalid" to "Enter the number in international format, starting with + and the country code.",
             "phone.change" to "Use a different phone number",
+            "phone.change_after" to "You can use a different phone number when the countdown ends.",
             "contact_code.sending" to "Sending a code…",
             "contact_code.title" to "Enter the code",
             "contact_code.body" to "We sent a code to {destination}. It expires in {minutes} minutes.",
@@ -869,6 +871,7 @@ object CredflareSpec {
         const val EMAIL_SEND: String = "email.send"
         const val EMAIL_INVALID: String = "email.invalid"
         const val EMAIL_CHANGE: String = "email.change"
+        const val EMAIL_CHANGE_AFTER: String = "email.change_after"
         const val PHONE_TITLE: String = "phone.title"
         const val PHONE_BODY: String = "phone.body"
         const val PHONE_LABEL: String = "phone.label"
@@ -876,6 +879,7 @@ object CredflareSpec {
         const val PHONE_SEND: String = "phone.send"
         const val PHONE_INVALID: String = "phone.invalid"
         const val PHONE_CHANGE: String = "phone.change"
+        const val PHONE_CHANGE_AFTER: String = "phone.change_after"
         const val CONTACT_CODE_SENDING: String = "contact_code.sending"
         const val CONTACT_CODE_TITLE: String = "contact_code.title"
         const val CONTACT_CODE_BODY: String = "contact_code.body"

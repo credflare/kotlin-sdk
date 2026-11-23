@@ -41,6 +41,7 @@ object CredflareVerification {
         var codeChannel: String? = null
         var codeRequest: CodeRequest? = null
         var codeDestination: String? = null
+        var changeAfter = false
         private val resendAt = mutableMapOf<String, Long>()
         var codeDraft = ""
         val leaveResult get() = rejection?.takeIf { it.action == "leave" }?.let { VerificationOutcome(VerificationResult.HOST_ACTION_REQUIRED, it.code) } ?: VerificationOutcome(VerificationResult.CANCELLED)
@@ -82,18 +83,20 @@ object CredflareVerification {
             catch(error: CredflareException) {
                 val next = error.resendAvailableAt?.let { IsoTime.parse(it) }?.time
                 if(next != null) resendAt[channel] = now + (next - wallClock).coerceIn(0L, CredflareSpec.Requirements.CONTACT_CODES_RESEND_SECONDS * 1000L)
-                if(error.code == "$channel.resend_too_soon" && (codeChannel != channel || codeDestination != destination)) {
-                    codeRequest = null; codeChannel = channel; codeDestination = destination; codeDraft = ""
+                if(error.code == "$channel.resend_too_soon") {
+                    val kept = codeRequest?.takeIf { it.channel == channel && (IsoTime.parse(it.expiresAt)?.time ?: 0L) > wallClock }
+                    if(kept != null) { changeAfter = codeDestination != destination; codeChannel = channel }
+                    else if(codeChannel != channel || codeDestination != destination) { codeRequest = null; codeChannel = channel; codeDestination = destination; codeDraft = ""; changeAfter = false }
                 }
                 throw if(error.status == 422) Rejected(Rejections.screen(error, null, verifier, help)) else error
             }
-            codeRequest = sent; codeChannel = channel; codeDestination = destination; resendAt[channel] = now + sent.resendDelayMillis; codeDraft = ""
+            codeRequest = sent; codeChannel = channel; codeDestination = destination; resendAt[channel] = now + sent.resendDelayMillis; codeDraft = ""; changeAfter = false
         }
-        fun changeDestination() { codeRequest = null; codeChannel = null; codeDestination = null; codeDraft = "" }
+        fun changeDestination() { codeChannel = null; changeAfter = false }
         fun confirmCode(channel: String, code: String, verifier: String) {
             try { client!!.confirmCode(channel, code) }
             catch(error: CredflareException) { throw if(error.status == 422) Rejected(Rejections.screen(error, null, verifier, help)) else error }
-            changeDestination()
+            codeRequest = null; codeChannel = null; codeDestination = null; codeDraft = ""; changeAfter = false
         }
         fun resendIn(channel: String, now: Long): Long = ((resendAt[channel] ?: 0L) - now).coerceAtLeast(0)
         fun canResend(channel: String, now: Long) = resendIn(channel, now) == 0L && codeRequest?.takeIf { it.channel == channel }?.sendsRemaining != 0

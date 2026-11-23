@@ -569,11 +569,12 @@ class VerificationActivity: Activity() {
             })
         } as Button
         val resend = button(copy(Key.CONTACT_CODE_RESEND), primary = false, enabled = current.canResend(channel, now())) {
-            current.destinations[channel]?.let { sendCode(current, channel, ContactCodes.normalize(channel, it) ?: it) }
+            (current.codeDestination ?: current.destinations[channel])?.let { sendCode(current, channel, ContactCodes.normalize(channel, it) ?: it) }
         } as Button
         val wait = small("")
         countdown(current, channel, resend, wait, resend = true)
         request?.let { small(copy(Key.CONTACT_CODE_SENDS_REMAINING, "count" to it.sendsRemaining)) }
+        if(current.changeAfter) small(copy(if(email) Key.EMAIL_CHANGE_AFTER else Key.PHONE_CHANGE_AFTER))
         button(copy(if(email) Key.EMAIL_CHANGE else Key.PHONE_CHANGE), primary = false) { current.changeDestination(); current.error = null; render() }
         if(current.codeDraft.isEmpty()) code.requestFocus()
     }

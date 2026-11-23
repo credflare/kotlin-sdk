@@ -99,6 +99,31 @@ class ContactCodeTest {
     }
 
     @Test
+    fun aNewDestinationRefusedTooSoonKeepsTheEarlierCodeEntry() {
+        val launch = CredflareVerification.Launch({ error("unused") }) {}
+        launch.client = server.session("codes")
+        launch.requestCode("phone", "+237650000001", "Acme", 0)
+        val request = launch.codeRequest
+        launch.changeDestination()
+        assertNull(launch.codeChannel)
+        launch.client = server.session("reject:phone.resend_too_soon")
+        val beforeExpiry = IsoTime.parse("2026-11-22T00:00:00.000Z")!!.time
+        try { launch.requestCode("phone", "+237650000002", "Acme", 1_000, beforeExpiry); throw AssertionError("not rejected") } catch(_: CredflareVerification.Rejected) {}
+        assertEquals(request, launch.codeRequest)
+        assertEquals("phone", launch.codeChannel)
+        assertEquals("+237650000001", launch.codeDestination)
+        assertTrue(launch.changeAfter)
+        assertEquals("+237650000002", launch.destinations["phone"])
+
+        launch.changeDestination()
+        val afterExpiry = IsoTime.parse("2026-11-22T00:57:43.000Z")!!.time
+        try { launch.requestCode("phone", "+237650000002", "Acme", 2_000, afterExpiry); throw AssertionError("not rejected") } catch(_: CredflareVerification.Rejected) {}
+        assertNull(launch.codeRequest)
+        assertEquals("+237650000002", launch.codeDestination)
+        assertFalse(launch.changeAfter)
+    }
+
+    @Test
     fun resendStaysOffWhenNoSendsRemain() {
         val launch = CredflareVerification.Launch({ error("unused") }) {}
         launch.codeRequest = CodeRequest.fromJson(ContractServer.fixture("phone-code-request.json").getJSONObject("data").put("sends_remaining", 0))
