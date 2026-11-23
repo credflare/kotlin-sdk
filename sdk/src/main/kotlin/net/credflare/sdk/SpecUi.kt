@@ -68,6 +68,18 @@ internal class SpecUi(private val context: Context) {
         setTextColor(color(color))
     }
 
+    @Suppress("DEPRECATION")
+    fun systemBars(window: android.view.Window) {
+        val light = !dark
+        if(android.os.Build.VERSION.SDK_INT >= 30) {
+            val mask = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+            window.insetsController?.setSystemBarsAppearance(if(light) mask else 0, mask)
+        } else {
+            val flags = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or (if(android.os.Build.VERSION.SDK_INT >= 26) View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR else 0)
+            window.decorView.systemUiVisibility = if(light) window.decorView.systemUiVisibility or flags else window.decorView.systemUiVisibility and flags.inv()
+        }
+    }
+
     fun rounded(fill: Long, stroke: Long? = null, radius: Int = CredflareSpec.Tokens.RADIUS_LG) = GradientDrawable().apply {
         cornerRadius = dp(radius).toFloat(); setColor(color(fill)); stroke?.let { setStroke(dp(1), color(it)) }
     }

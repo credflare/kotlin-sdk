@@ -125,6 +125,7 @@ class VerificationActivity: Activity() {
         val container = FrameLayout(this)
         container.addView(page, FrameLayout.LayoutParams(minOf(resources.displayMetrics.widthPixels, ui.dp(T.SIZE_MAX_CONTENT_WIDTH)), -2, Gravity.CENTER_HORIZONTAL))
         scroll.addView(container); setContentView(scroll)
+        ui.systemBars(window)
         if(Build.VERSION.SDK_INT >= 35) scroll.setOnApplyWindowInsetsListener { view, insets -> val bars = insets.getInsets(android.view.WindowInsets.Type.systemBars()); view.setPadding(bars.left, bars.top, bars.right, bars.bottom); insets }
         val current = flow
         if(current == null) {
