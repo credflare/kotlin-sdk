@@ -157,12 +157,15 @@ class VerificationActivity: Activity() {
 
     private fun header(current: CredflareVerification.Launch) {
         val bar = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; minimumHeight = ui.dp(T.SIZE_HEADER_HEIGHT) }
-        bar.addView(View(this), LinearLayout.LayoutParams(ui.dp(64), 1))
-        bar.addView(ui.text(current.info?.requesterName.orEmpty(), T.TYPE_LABEL, ui.palette.muted).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }, LinearLayout.LayoutParams(0, -2, 1f))
-        bar.addView(Button(this).apply {
+        val balance = View(this)
+        bar.addView(balance, LinearLayout.LayoutParams(ui.dp(64), 1))
+        bar.addView(ui.text(current.info?.requesterName.orEmpty(), T.TYPE_LABEL, ui.palette.muted).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END }, LinearLayout.LayoutParams(0, -2, 1f))
+        val close = Button(this).apply {
             text = copy(Key.COMMON_CLOSE); isAllCaps = false; isEnabled = !current.busy; background = null; setTextColor(ui.color(ui.palette.primary)); minWidth = ui.dp(64)
             setOnClickListener { closeRequested() }
-        }, LinearLayout.LayoutParams(-2, ui.dp(T.SIZE_LINK_HEIGHT)))
+        }
+        bar.addView(close, LinearLayout.LayoutParams(-2, ui.dp(T.SIZE_LINK_HEIGHT)))
+        close.addOnLayoutChangeListener { _, left, _, right, _, _, _, _, _ -> if(balance.layoutParams.width != right - left) balance.post { balance.layoutParams = LinearLayout.LayoutParams(right - left, 1) } }
         page.addView(bar, LinearLayout.LayoutParams(-1, -2))
         if(current.info?.environment == "sandbox") add(ui.text(copy(Key.COMMON_TEST_MODE), T.TYPE_CHIP, ui.palette.warningInk).apply {
             background = ui.rounded(ui.palette.warningSoft, radius = T.RADIUS_PILL); setPadding(ui.dp(T.SPACING_MD), ui.dp(T.SPACING_XS), ui.dp(T.SPACING_MD), ui.dp(T.SPACING_XS))
