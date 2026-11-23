@@ -114,6 +114,7 @@ object CredflareVerification {
             codeRequest = null; codeChannel = null; codeDestination = null; codeDraft = ""; changeAfter = false
         }
         fun resendIn(channel: String, now: Long): Long = ((resendAt[channel] ?: 0L) - now).coerceAtLeast(0)
+        fun showsChangeAfter(channel: String, now: Long) = changeAfter && resendIn(channel, now) > 0
         fun canResend(channel: String, now: Long) = resendIn(channel, now) == 0L && codeRequest?.takeIf { it.channel == channel }?.sendsRemaining != 0
         fun sendAnswers(questionnaire: Questionnaire, verifier: String) {
             answerErrors = questionnaire.errors(answers, earlier)

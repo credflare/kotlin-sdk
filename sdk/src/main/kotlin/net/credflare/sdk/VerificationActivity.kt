@@ -516,10 +516,11 @@ class VerificationActivity: Activity() {
     private fun sendCode(current: CredflareVerification.Launch, channel: String, destination: String) =
         work(copy(Key.CONTACT_CODE_SENDING), Key.ERRORS_SEND_CODE_FAILED, { current.requestCode(channel, destination, verifier, now()) })
 
-    private fun countdown(current: CredflareVerification.Launch, channel: String, action: Button, wait: View) {
+    private fun countdown(current: CredflareVerification.Launch, channel: String, action: Button, wait: View, note: View?) {
         val tick = object: Runnable {
             override fun run() {
                 val left = current.resendIn(channel, now())
+                note?.visibility = if(current.showsChangeAfter(channel, now())) View.VISIBLE else View.GONE
                 val ready = current.canResend(channel, now())
                 action.isEnabled = ready; action.alpha = if(ready) 1f else 0.5f
                 (wait as TextView).text = if(left == 0L) "" else copy(Key.CONTACT_CODE_RESEND_IN, "seconds" to (left + 999) / 1000)
@@ -579,9 +580,9 @@ class VerificationActivity: Activity() {
             current.codeTarget(channel)?.let { sendCode(current, channel, ContactCodes.normalize(channel, it) ?: it) }
         } as Button
         val wait = small("")
-        countdown(current, channel, resend, wait)
         request?.let { small(copy(Key.CONTACT_CODE_SENDS_REMAINING, "count" to it.sendsRemaining)) }
-        if(current.changeAfter) small(copy(if(email) Key.EMAIL_CHANGE_AFTER else Key.PHONE_CHANGE_AFTER))
+        val note = if(current.changeAfter) small(copy(if(email) Key.EMAIL_CHANGE_AFTER else Key.PHONE_CHANGE_AFTER)) else null
+        countdown(current, channel, resend, wait, note)
         button(copy(if(email) Key.EMAIL_CHANGE else Key.PHONE_CHANGE), primary = false) { current.changeDestination(); current.error = null; render() }
         if(current.codeDraft.isEmpty()) code.requestFocus()
     }

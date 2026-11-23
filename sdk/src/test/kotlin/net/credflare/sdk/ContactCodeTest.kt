@@ -115,6 +115,8 @@ class ContactCodeTest {
         assertEquals("phone", launch.codeChannel)
         assertEquals("+237650000001", launch.codeDestination)
         assertTrue(launch.changeAfter)
+        assertTrue(launch.showsChangeAfter("phone", 1_000))
+        assertFalse(launch.showsChangeAfter("phone", 61_000))
         assertEquals("+237650000002", launch.destinations["phone"])
 
         launch.changeDestination()
