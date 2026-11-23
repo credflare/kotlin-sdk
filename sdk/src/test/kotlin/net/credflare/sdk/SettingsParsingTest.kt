@@ -26,7 +26,7 @@ class SettingsParsingTest {
         assertEquals(LocationReference("within", "any", listOf("Head office")), location.reference)
         assertTrue(info.requiresFacial && info.requiresLocation)
         assertFalse(info.needsHostSteps)
-        assertEquals("Mrs. Jakayla Kris's Workspace", info.requesterName)
+        assertEquals("Pauline Sipes's Workspace", info.requesterName)
     }
 
     @Test
