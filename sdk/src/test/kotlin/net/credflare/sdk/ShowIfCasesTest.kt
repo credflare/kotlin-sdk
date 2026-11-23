@@ -13,7 +13,7 @@ class ShowIfCasesTest {
     fun everyBackendCaseMatches() {
         val conditions = cases.getJSONArray("conditions")
         val showIf = cases.getJSONArray("show_if")
-        assertEquals(62, conditions.length() + showIf.length())
+        assertEquals(true, conditions.length() + showIf.length() >= 65)
         val failures = mutableListOf<String>()
         for(index in 0 until conditions.length()) {
             val case = conditions.getJSONObject(index)
@@ -24,6 +24,19 @@ class ShowIfCasesTest {
             val case = showIf.getJSONObject(index)
             if(Conditions.visible(ShowIf.fromJson(case.optJSONObject("show_if")), form(case.get("form"))) != case.getBoolean("expect")) failures += case.getString("name")
         }
+        assertEquals(emptyList<String>(), failures)
+    }
+
+    @Test
+    fun edgeInputsMatchTheReferenceEvaluator() {
+        val cases = org.json.JSONArray(java.io.File("../example/src/androidTest/assets/reference-conditions.json").readText())
+        val failures = mutableListOf<String>()
+        for(index in 0 until cases.length()) {
+            val case = cases.getJSONObject(index)
+            val condition = case.getJSONObject("condition").let { Condition(it.getString("path"), it.getString("op"), Conditions.plain(it.opt("value"))) }
+            if(Conditions.test(condition, mapOf("form" to form(case.get("form")))) != case.getBoolean("expect")) failures += case.getString("name")
+        }
+        assertEquals(15, cases.length())
         assertEquals(emptyList<String>(), failures)
     }
 

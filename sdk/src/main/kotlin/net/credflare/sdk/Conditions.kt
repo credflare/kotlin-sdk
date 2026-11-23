@@ -20,9 +20,13 @@ data class ShowIf(val match: String, val conditions: List<Condition>) {
 }
 
 object Conditions {
-    private val DATE = Regex("^\\d{4}-\\d{2}-\\d{2}([T ][0-9:.]+(Z|[+-]\\d{2}:?\\d{2})?)?$")
-    private val NUMERIC = Regex("^[ \\t\\n\\r\\u000B\\u000C]*[+-]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][+-]?\\d+)?[ \\t\\n\\r\\u000B\\u000C]*$")
-    private val TIME = Regex("^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2})(?::(\\d{2})(?:\\.(\\d+))?)?(Z|([+-])(\\d{2}):(\\d{2}))$")
+    private val DATE = Regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}([T ][0-9:.]+(Z|[+-][0-9]{2}:?[0-9]{2})?)?$")
+    private val NUMERIC = Regex("^[ \\t\\n\\r\\u000B\\u000C]*[+-]?([0-9]+(\\.[0-9]*)?|\\.[0-9]+)([eE][+-]?[0-9]+)?[ \\t\\n\\r\\u000B\\u000C]*$")
+    private val TIME = Regex("^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\\.([0-9]+))?)?(Z|([+-])([0-9]{2}):([0-9]{2}))$")
+    private const val FUZZY_LENGTH = 200
+    private const val SPACE = "\\t\\n\\u000B\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff"
+    private val SPACES = Regex("[$SPACE]+")
+    private val EDGES = Regex("^[$SPACE]+|[$SPACE]+$")
 
     fun plain(value: Any?): Any? = when(value) {
         null, JSONObject.NULL -> null
@@ -85,22 +89,23 @@ object Conditions {
     private fun time(value: String): Long? {
         var iso = value.replaceFirst(' ', 'T')
         if(!iso.contains('T')) iso += "T00:00:00"
-        if(!Regex("(Z|[+-]\\d{2}:?\\d{2})$").containsMatchIn(iso)) iso += "Z"
-        iso = iso.replace(Regex("([+-]\\d{2})(\\d{2})$"), "$1:$2")
+        if(!Regex("(Z|[+-][0-9]{2}:?[0-9]{2})$").containsMatchIn(iso)) iso += "Z"
+        iso = iso.replace(Regex("([+-][0-9]{2})([0-9]{2})$"), "$1:$2")
         val m = TIME.matchEntire(iso) ?: return null
         val g = m.groupValues
+        val millis = g[7].take(3).padEnd(3, '0').ifEmpty { "0" }.toInt()
+        val endOfDay = g[4] == "24" && g[5] == "00" && g[6].ifEmpty { "0" }.toInt() == 0 && millis == 0
         val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
             isLenient = false; clear()
-            set(g[1].toInt(), g[2].toInt() - 1, g[3].toInt(), g[4].toInt(), g[5].toInt(), g[6].ifEmpty { "0" }.toInt())
+            set(g[1].toInt(), g[2].toInt() - 1, g[3].toInt(), if(endOfDay) 0 else g[4].toInt(), g[5].toInt(), g[6].ifEmpty { "0" }.toInt())
         }
-        val base = try { calendar.timeInMillis } catch(_: IllegalArgumentException) { return null }
-        val millis = g[7].take(3).padEnd(3, '0').ifEmpty { "0" }.toInt()
+        val base = (try { calendar.timeInMillis } catch(_: IllegalArgumentException) { return null }) + if(endOfDay) 86_400_000L else 0L
         val offset = if(g[8] == "Z") 0L else (if(g[9] == "-") -1 else 1) * (g[10].toLong() * 60 + g[11].toLong()) * 60000
         return base + millis - offset
     }
 
     private fun compare(actual: Any?, expected: Any?): Int? {
-        if(isNumeric(actual) && isNumeric(expected)) return number(actual).compareTo(number(expected)).coerceIn(-1, 1)
+        if(isNumeric(actual) && isNumeric(expected)) return (number(actual) - number(expected)).takeIf { !it.isNaN() }?.let { Math.signum(it).toInt() }
         if(actual is String && expected is String && DATE.matches(actual) && DATE.matches(expected)) {
             val a = time(actual) ?: return null; val b = time(expected) ?: return null
             return a.compareTo(b).coerceIn(-1, 1)
@@ -118,7 +123,24 @@ object Conditions {
 
     private fun regex(actual: Any?, pattern: Any?): Boolean {
         if(!isScalar(actual) || pattern !is String || pattern.length > CredflareSpec.Requirements.SHOW_IF_MAX_PATTERN_LENGTH) return false
-        return try { Pattern.compile(pattern).matcher(text(actual)).find() } catch(_: Exception) { false }
+        return try { Pattern.compile(script(pattern)).matcher(text(actual)).find() } catch(_: Exception) { false }
+    }
+
+    private fun script(pattern: String): String {
+        val out = StringBuilder()
+        var i = 0
+        while(i < pattern.length) {
+            val c = pattern[i]
+            if(c != '\\' || i + 1 >= pattern.length) { out.append(c); i++; continue }
+            out.append(when(val next = pattern[i + 1]) {
+                'd' -> "[0-9]"; 'D' -> "[^0-9]"
+                'w' -> "[A-Za-z0-9_]"; 'W' -> "[^A-Za-z0-9_]"
+                's' -> "[$SPACE]"; 'S' -> "[^$SPACE]"
+                else -> "\\$next"
+            })
+            i += 2
+        }
+        return out.toString()
     }
 
     private fun common(a: ByteArray, aFrom: Int, aTo: Int, b: ByteArray, bFrom: Int, bTo: Int): Int {
@@ -139,7 +161,11 @@ object Conditions {
 
     private fun fuzzy(actual: Any?, expected: Any?): Boolean {
         if(!isScalar(actual) || expected !is Map<*, *> || !isScalar(expected["text"])) return false
-        fun normalize(v: Any?) = text(v).lowercase().trim().replace(Regex("\\s+"), " ")
+        fun normalize(v: Any?): String {
+            val value = text(v).lowercase().replace(EDGES, "").replace(SPACES, " ")
+            val limit = FUZZY_LENGTH
+            return if(value.codePointCount(0, value.length) <= limit) value else value.substring(0, value.offsetByCodePoints(0, limit))
+        }
         val raw = expected["min_score"]
         val min = when { raw == null -> CredflareSpec.Requirements.SHOW_IF_FUZZY_DEFAULT_MIN_SCORE.toDouble(); isNumeric(raw) -> number(raw); else -> return false }
         return similarity(normalize(actual), normalize(expected["text"])) >= min

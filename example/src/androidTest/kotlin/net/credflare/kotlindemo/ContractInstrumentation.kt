@@ -25,6 +25,14 @@ class ContractInstrumentation: Instrumentation() {
             check(info.documents[0].captureSteps().map { it.id } == listOf("camera_or_upload:front","camera_or_upload:back"))
             val combined=JSONObject(context.assets.open("capture-snapshot_and_upload.json").bufferedReader().use { it.readText() }).getJSONObject("data")
             check(SessionInfo.fromJson(combined).documents[0].captureSteps().map { it.id } == listOf("camera:front","camera:back","upload:front","upload:back"))
+            fun asset(name: String) = context.assets.open(name).bufferedReader().use { it.readText() }
+            fun form(value: Any?): Map<String, Any?> = (Conditions.plain(value) as? Map<*, *>)?.mapKeys { it.key.toString() } ?: emptyMap()
+            fun replay(cases: org.json.JSONArray) = (0 until cases.length()).map { cases.getJSONObject(it) }.filter { case ->
+                val condition = case.getJSONObject("condition")
+                Conditions.test(Condition(condition.getString("path"), condition.getString("op"), Conditions.plain(condition.opt("value"))), mapOf("form" to form(case.get("form")))) != case.getBoolean("expect")
+            }.map { it.getString("name") }
+            val mismatched = replay(JSONObject(asset("show-if-cases.json")).getJSONArray("conditions")) + replay(org.json.JSONArray(asset("reference-conditions.json")))
+            check(mismatched.isEmpty()) { "Conditions differ from the reference: $mismatched" }
             fun expect(type: String, operation: () -> Unit) {
                 try { operation(); error("Expected $type failure") } catch(error: CredflareException) { check(error.type == type) { "Expected $type, received ${error.type}" } }
             }
