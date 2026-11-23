@@ -79,9 +79,10 @@ class AttemptKeysTest {
         current.liveness = capture
         current.challenge = capture.challenge
 
-        val error = try { current.sendLiveness(capture, "Acme"); fail(); throw IllegalStateException() } catch(error: IllegalArgumentException) { error }
+        val error = try { current.sendLiveness(capture, "Acme"); fail(); throw IllegalStateException() } catch(error: CredflareVerification.Rejected) { error }
 
-        assertEquals(SpecCopy.text(CredflareSpec.CopyKey.LIVENESS_EXPIRED), error.message)
+        assertEquals(SpecCopy.text(CredflareSpec.CopyKey.LIVENESS_EXPIRED), error.screen.message)
+        assertEquals("restart", error.screen.action)
         assertNull(current.liveness)
         assertNull(current.challenge)
         assertFalse(video.exists())
@@ -113,9 +114,10 @@ class AttemptKeysTest {
         current.acceptLocation(fix)
         val key = current.locationKey
 
-        val error = try { current.sendLocation(fix, null, "Acme"); fail(); throw IllegalStateException() } catch(error: IllegalArgumentException) { error }
+        val error = try { current.sendLocation(fix, null, "Acme"); fail(); throw IllegalStateException() } catch(error: CredflareVerification.Rejected) { error }
 
-        assertEquals(SpecCopy.text(CredflareSpec.CopyKey.LOCATION_STALE), error.message)
+        assertEquals(SpecCopy.text(CredflareSpec.CopyKey.LOCATION_STALE), error.screen.message)
+        assertEquals("retry", error.screen.action)
         assertNull(current.locationFix)
         assertEquals(1, current.locationFailures)
         current.acceptLocation(fix)

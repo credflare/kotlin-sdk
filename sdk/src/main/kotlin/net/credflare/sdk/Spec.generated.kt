@@ -1,5 +1,5 @@
 // GENERATED FILE, DO NOT EDIT.
-// Source: credflare sdk-spec 1.0.0 (ef15c85fc748). Regenerate with scripts/generate.mjs.
+// Source: credflare sdk-spec 1.1.0 (eb176f038a44). Regenerate with scripts/generate.mjs.
 @file:Suppress("unused", "MemberVisibilityCanBePrivate")
 
 package net.credflare.sdk
@@ -21,6 +21,15 @@ data class SpecSetting(
     val max: Double? = null,
     val options: List<String>,
     val defaultJson: String? = null,
+)
+
+/** Applicant copy for a rejection code. Every text field is a copy key. The place messages replace message when the location requirement has reference places. */
+data class SpecRejectionCopy(
+    val title: String,
+    val message: String,
+    val action: String,
+    val placeMessageWithin: String? = null,
+    val placeMessageOutside: String? = null,
 )
 
 data class SpecPalette(
@@ -61,8 +70,8 @@ data class SpecIcon(
 )
 
 object CredflareSpec {
-    const val VERSION: String = "1.0.0"
-    const val HASH: String = "ef15c85fc748"
+    const val VERSION: String = "1.1.0"
+    const val HASH: String = "eb176f038a44"
 
     object Liveness {
         const val VERSION: Int = 1
@@ -483,6 +492,9 @@ object CredflareSpec {
             "receipt.document" to "{document} received",
             "receipt.selfie" to "Selfie received",
             "receipt.location" to "Location received",
+            "receipt.email" to "Email address received",
+            "receipt.phone" to "Phone number received",
+            "receipt.answers" to "Answers received",
             "receipt.host_steps" to "The app will guide you through the remaining steps.",
             "receipt.done" to "Done",
             "selfie.title" to "Take a selfie",
@@ -564,6 +576,102 @@ object CredflareSpec {
             "location.place.not_precise" to "Your location is not precise enough to check this place. Move near a window or outside, then try again.",
             "location.place.rejected" to "Your location does not match the place requested by {verifier}. Try again from the right place.",
             "location.place.retry" to "Try again",
+            "email.title" to "Confirm your email address",
+            "email.body" to "{verifier} asks you to confirm an email address. We will send a short code to it.",
+            "email.label" to "Email address",
+            "email.placeholder" to "name@example.com",
+            "email.send" to "Send code",
+            "email.invalid" to "Enter a valid email address.",
+            "email.change" to "Use a different email address",
+            "email.change_after" to "You can use a different email address when the countdown ends.",
+            "phone.title" to "Confirm your phone number",
+            "phone.body" to "{verifier} asks you to confirm a phone number. We will send a short code to it by text message.",
+            "phone.label" to "Phone number",
+            "phone.hint" to "Start with + and your country code, for example +44 7700 900123.",
+            "phone.send" to "Send code",
+            "phone.invalid" to "Enter the number in international format, starting with + and the country code.",
+            "phone.change" to "Use a different phone number",
+            "phone.change_after" to "You can use a different phone number when the countdown ends.",
+            "contact_code.sending" to "Sending a code…",
+            "contact_code.title" to "Enter the code",
+            "contact_code.body" to "We sent a code to {destination}. It expires in {minutes} minutes.",
+            "contact_code.label" to "Code",
+            "contact_code.confirm" to "Confirm",
+            "contact_code.confirming" to "Checking the code…",
+            "contact_code.resend" to "Send a new code",
+            "contact_code.resend_in" to "You can ask for a new code in {seconds} seconds.",
+            "contact_code.sends_remaining" to "You can ask for {count} more codes.",
+            "questions.title" to "Answer a few questions",
+            "questions.body" to "{verifier} asks for these details.",
+            "questions.optional" to "Optional",
+            "questions.choose_one" to "Choose an option",
+            "questions.choose_many" to "Choose all that apply.",
+            "questions.choose_country" to "Choose a country",
+            "questions.send" to "Send answers",
+            "questions.sending" to "Sending your answers…",
+            "questions.required" to "Answer this question to continue.",
+            "questions.consent_required" to "Give your consent to continue.",
+            "questions.invalid_number" to "Enter a number.",
+            "questions.number_min" to "Enter at least {min}.",
+            "questions.number_max" to "Enter at most {max}.",
+            "questions.invalid_date" to "Enter a real date.",
+            "questions.invalid_email" to "Enter a valid email address.",
+            "questions.invalid_phone" to "Enter a valid phone number.",
+            "questions.text_too_long" to "Use at most 5000 characters.",
+            "questions.founders_name" to "Founder name",
+            "questions.founders_add" to "Add a founder",
+            "questions.founders_remove" to "Remove",
+            "questions.founders_includes_me" to "I am one of the founders",
+            "handoff.action" to "Continue on your phone",
+            "handoff.title" to "Continue on your phone",
+            "handoff.body" to "Scan this code with your phone camera to carry on there. The code works once and expires in {minutes} minutes.",
+            "handoff.expired" to "This code has expired.",
+            "handoff.new_code" to "Show a new code",
+            "handoff.link_invalid" to "This link has expired or was already used. Open a new one on the device where you started.",
+            "rejection.requested_by" to "Requested by {verifier}.",
+            "rejection.help" to "If you need help, contact {verifier}.",
+            "rejection.help_email" to "If you need help, contact {verifier} at {help_email}.",
+            "rejection.help_url" to "If you need help, visit {help_url}.",
+            "rejection.action.retry" to "Try again",
+            "rejection.action.restart" to "Start again",
+            "rejection.action.reenter_code" to "Enter the code again",
+            "rejection.action.new_code" to "Send a new code",
+            "rejection.action.wait" to "Send a new code",
+            "rejection.action.leave" to "Close",
+            "rejection.location_accuracy.title" to "Location not precise enough",
+            "rejection.location_stale.title" to "Location out of date",
+            "rejection.location_mock.title" to "Location is being changed",
+            "rejection.location_ip_country.title" to "Connection in another country",
+            "rejection.location_reference.title" to "Location does not match",
+            "rejection.liveness_expired.title" to "Time ran out",
+            "rejection.liveness_restart.title" to "Start this step again",
+            "rejection.liveness_restart.message" to "This attempt can no longer be used. Start this step again.",
+            "rejection.gesture_mismatch.title" to "Movements did not match",
+            "rejection.gesture_mismatch.message" to "Some movements were missing or out of order. Start this step again and follow each prompt.",
+            "rejection.not_camera.title" to "Camera needed",
+            "rejection.not_camera.message" to "This step needs photos taken with the camera during the step. Start it again and use the camera.",
+            "rejection.video_missing.title" to "Recording missing",
+            "rejection.video_missing.message" to "The recording of this step did not arrive. Start the step again.",
+            "rejection.video_too_long.title" to "Recording too long",
+            "rejection.video_too_long.message" to "The recording was longer than allowed. Start the step again and follow the prompts without pausing.",
+            "rejection.video_unreadable.title" to "Recording could not be read",
+            "rejection.video_unreadable.message" to "We could not read the recording. Start the step again.",
+            "rejection.email_not_configured.title" to "Email confirmation unavailable",
+            "rejection.email_not_configured.message" to "Confirming an email address is not available for this request yet. Contact {verifier}.",
+            "rejection.phone_not_configured.title" to "Phone confirmation unavailable",
+            "rejection.phone_not_configured.message" to "Confirming a phone number is not available for this request yet. Contact {verifier}.",
+            "rejection.code_resend_too_soon.title" to "Wait before asking again",
+            "rejection.code_resend_too_soon.message" to "A code was sent less than a minute ago. Wait a moment, then ask for a new code.",
+            "rejection.code_send_limit.title" to "Too many codes sent",
+            "rejection.code_send_limit.message" to "Too many codes were sent for this request. Try again in 24 hours.",
+            "rejection.code_missing.title" to "No code to check",
+            "rejection.code_missing.message" to "Ask for a code first, then enter it here.",
+            "rejection.code_expired.title" to "Code expired",
+            "rejection.code_expired.message" to "This code has expired. Ask for a new one.",
+            "rejection.code_invalid.title" to "Code not correct",
+            "rejection.code_invalid.message" to "This code is not correct. Check it and enter it again.",
+            "rejection.code_too_many_attempts.title" to "Too many wrong codes",
+            "rejection.code_too_many_attempts.message" to "Too many wrong codes were entered. Ask for a new code.",
             "errors.generic" to "Something went wrong. Try again.",
             "errors.network" to "Could not connect. Check your connection and try again.",
             "errors.session_expired" to "Your session has expired. Close this screen and start again.",
@@ -587,6 +695,9 @@ object CredflareSpec {
             "errors.send_selfie_failed" to "Could not send your selfie. Check your connection and try again.",
             "errors.challenge_failed" to "We could not start this step. Check your connection and try again.",
             "errors.send_location_failed" to "Could not send your location. Check your connection and try again.",
+            "errors.send_code_failed" to "Could not send the code. Check your connection and try again.",
+            "errors.confirm_code_failed" to "Could not check the code. Check your connection and try again.",
+            "errors.send_answers_failed" to "Could not send your answers. Check your connection and try again.",
         )
     }
 
@@ -669,6 +780,9 @@ object CredflareSpec {
         const val RECEIPT_DOCUMENT: String = "receipt.document"
         const val RECEIPT_SELFIE: String = "receipt.selfie"
         const val RECEIPT_LOCATION: String = "receipt.location"
+        const val RECEIPT_EMAIL: String = "receipt.email"
+        const val RECEIPT_PHONE: String = "receipt.phone"
+        const val RECEIPT_ANSWERS: String = "receipt.answers"
         const val RECEIPT_HOST_STEPS: String = "receipt.host_steps"
         const val RECEIPT_DONE: String = "receipt.done"
         const val SELFIE_TITLE: String = "selfie.title"
@@ -750,6 +864,102 @@ object CredflareSpec {
         const val LOCATION_PLACE_NOT_PRECISE: String = "location.place.not_precise"
         const val LOCATION_PLACE_REJECTED: String = "location.place.rejected"
         const val LOCATION_PLACE_RETRY: String = "location.place.retry"
+        const val EMAIL_TITLE: String = "email.title"
+        const val EMAIL_BODY: String = "email.body"
+        const val EMAIL_LABEL: String = "email.label"
+        const val EMAIL_PLACEHOLDER: String = "email.placeholder"
+        const val EMAIL_SEND: String = "email.send"
+        const val EMAIL_INVALID: String = "email.invalid"
+        const val EMAIL_CHANGE: String = "email.change"
+        const val EMAIL_CHANGE_AFTER: String = "email.change_after"
+        const val PHONE_TITLE: String = "phone.title"
+        const val PHONE_BODY: String = "phone.body"
+        const val PHONE_LABEL: String = "phone.label"
+        const val PHONE_HINT: String = "phone.hint"
+        const val PHONE_SEND: String = "phone.send"
+        const val PHONE_INVALID: String = "phone.invalid"
+        const val PHONE_CHANGE: String = "phone.change"
+        const val PHONE_CHANGE_AFTER: String = "phone.change_after"
+        const val CONTACT_CODE_SENDING: String = "contact_code.sending"
+        const val CONTACT_CODE_TITLE: String = "contact_code.title"
+        const val CONTACT_CODE_BODY: String = "contact_code.body"
+        const val CONTACT_CODE_LABEL: String = "contact_code.label"
+        const val CONTACT_CODE_CONFIRM: String = "contact_code.confirm"
+        const val CONTACT_CODE_CONFIRMING: String = "contact_code.confirming"
+        const val CONTACT_CODE_RESEND: String = "contact_code.resend"
+        const val CONTACT_CODE_RESEND_IN: String = "contact_code.resend_in"
+        const val CONTACT_CODE_SENDS_REMAINING: String = "contact_code.sends_remaining"
+        const val QUESTIONS_TITLE: String = "questions.title"
+        const val QUESTIONS_BODY: String = "questions.body"
+        const val QUESTIONS_OPTIONAL: String = "questions.optional"
+        const val QUESTIONS_CHOOSE_ONE: String = "questions.choose_one"
+        const val QUESTIONS_CHOOSE_MANY: String = "questions.choose_many"
+        const val QUESTIONS_CHOOSE_COUNTRY: String = "questions.choose_country"
+        const val QUESTIONS_SEND: String = "questions.send"
+        const val QUESTIONS_SENDING: String = "questions.sending"
+        const val QUESTIONS_REQUIRED: String = "questions.required"
+        const val QUESTIONS_CONSENT_REQUIRED: String = "questions.consent_required"
+        const val QUESTIONS_INVALID_NUMBER: String = "questions.invalid_number"
+        const val QUESTIONS_NUMBER_MIN: String = "questions.number_min"
+        const val QUESTIONS_NUMBER_MAX: String = "questions.number_max"
+        const val QUESTIONS_INVALID_DATE: String = "questions.invalid_date"
+        const val QUESTIONS_INVALID_EMAIL: String = "questions.invalid_email"
+        const val QUESTIONS_INVALID_PHONE: String = "questions.invalid_phone"
+        const val QUESTIONS_TEXT_TOO_LONG: String = "questions.text_too_long"
+        const val QUESTIONS_FOUNDERS_NAME: String = "questions.founders_name"
+        const val QUESTIONS_FOUNDERS_ADD: String = "questions.founders_add"
+        const val QUESTIONS_FOUNDERS_REMOVE: String = "questions.founders_remove"
+        const val QUESTIONS_FOUNDERS_INCLUDES_ME: String = "questions.founders_includes_me"
+        const val HANDOFF_ACTION: String = "handoff.action"
+        const val HANDOFF_TITLE: String = "handoff.title"
+        const val HANDOFF_BODY: String = "handoff.body"
+        const val HANDOFF_EXPIRED: String = "handoff.expired"
+        const val HANDOFF_NEW_CODE: String = "handoff.new_code"
+        const val HANDOFF_LINK_INVALID: String = "handoff.link_invalid"
+        const val REJECTION_REQUESTED_BY: String = "rejection.requested_by"
+        const val REJECTION_HELP: String = "rejection.help"
+        const val REJECTION_HELP_EMAIL: String = "rejection.help_email"
+        const val REJECTION_HELP_URL: String = "rejection.help_url"
+        const val REJECTION_ACTION_RETRY: String = "rejection.action.retry"
+        const val REJECTION_ACTION_RESTART: String = "rejection.action.restart"
+        const val REJECTION_ACTION_REENTER_CODE: String = "rejection.action.reenter_code"
+        const val REJECTION_ACTION_NEW_CODE: String = "rejection.action.new_code"
+        const val REJECTION_ACTION_WAIT: String = "rejection.action.wait"
+        const val REJECTION_ACTION_LEAVE: String = "rejection.action.leave"
+        const val REJECTION_LOCATION_ACCURACY_TITLE: String = "rejection.location_accuracy.title"
+        const val REJECTION_LOCATION_STALE_TITLE: String = "rejection.location_stale.title"
+        const val REJECTION_LOCATION_MOCK_TITLE: String = "rejection.location_mock.title"
+        const val REJECTION_LOCATION_IP_COUNTRY_TITLE: String = "rejection.location_ip_country.title"
+        const val REJECTION_LOCATION_REFERENCE_TITLE: String = "rejection.location_reference.title"
+        const val REJECTION_LIVENESS_EXPIRED_TITLE: String = "rejection.liveness_expired.title"
+        const val REJECTION_LIVENESS_RESTART_TITLE: String = "rejection.liveness_restart.title"
+        const val REJECTION_LIVENESS_RESTART_MESSAGE: String = "rejection.liveness_restart.message"
+        const val REJECTION_GESTURE_MISMATCH_TITLE: String = "rejection.gesture_mismatch.title"
+        const val REJECTION_GESTURE_MISMATCH_MESSAGE: String = "rejection.gesture_mismatch.message"
+        const val REJECTION_NOT_CAMERA_TITLE: String = "rejection.not_camera.title"
+        const val REJECTION_NOT_CAMERA_MESSAGE: String = "rejection.not_camera.message"
+        const val REJECTION_VIDEO_MISSING_TITLE: String = "rejection.video_missing.title"
+        const val REJECTION_VIDEO_MISSING_MESSAGE: String = "rejection.video_missing.message"
+        const val REJECTION_VIDEO_TOO_LONG_TITLE: String = "rejection.video_too_long.title"
+        const val REJECTION_VIDEO_TOO_LONG_MESSAGE: String = "rejection.video_too_long.message"
+        const val REJECTION_VIDEO_UNREADABLE_TITLE: String = "rejection.video_unreadable.title"
+        const val REJECTION_VIDEO_UNREADABLE_MESSAGE: String = "rejection.video_unreadable.message"
+        const val REJECTION_EMAIL_NOT_CONFIGURED_TITLE: String = "rejection.email_not_configured.title"
+        const val REJECTION_EMAIL_NOT_CONFIGURED_MESSAGE: String = "rejection.email_not_configured.message"
+        const val REJECTION_PHONE_NOT_CONFIGURED_TITLE: String = "rejection.phone_not_configured.title"
+        const val REJECTION_PHONE_NOT_CONFIGURED_MESSAGE: String = "rejection.phone_not_configured.message"
+        const val REJECTION_CODE_RESEND_TOO_SOON_TITLE: String = "rejection.code_resend_too_soon.title"
+        const val REJECTION_CODE_RESEND_TOO_SOON_MESSAGE: String = "rejection.code_resend_too_soon.message"
+        const val REJECTION_CODE_SEND_LIMIT_TITLE: String = "rejection.code_send_limit.title"
+        const val REJECTION_CODE_SEND_LIMIT_MESSAGE: String = "rejection.code_send_limit.message"
+        const val REJECTION_CODE_MISSING_TITLE: String = "rejection.code_missing.title"
+        const val REJECTION_CODE_MISSING_MESSAGE: String = "rejection.code_missing.message"
+        const val REJECTION_CODE_EXPIRED_TITLE: String = "rejection.code_expired.title"
+        const val REJECTION_CODE_EXPIRED_MESSAGE: String = "rejection.code_expired.message"
+        const val REJECTION_CODE_INVALID_TITLE: String = "rejection.code_invalid.title"
+        const val REJECTION_CODE_INVALID_MESSAGE: String = "rejection.code_invalid.message"
+        const val REJECTION_CODE_TOO_MANY_ATTEMPTS_TITLE: String = "rejection.code_too_many_attempts.title"
+        const val REJECTION_CODE_TOO_MANY_ATTEMPTS_MESSAGE: String = "rejection.code_too_many_attempts.message"
         const val ERRORS_GENERIC: String = "errors.generic"
         const val ERRORS_NETWORK: String = "errors.network"
         const val ERRORS_SESSION_EXPIRED: String = "errors.session_expired"
@@ -773,6 +983,9 @@ object CredflareSpec {
         const val ERRORS_SEND_SELFIE_FAILED: String = "errors.send_selfie_failed"
         const val ERRORS_CHALLENGE_FAILED: String = "errors.challenge_failed"
         const val ERRORS_SEND_LOCATION_FAILED: String = "errors.send_location_failed"
+        const val ERRORS_SEND_CODE_FAILED: String = "errors.send_code_failed"
+        const val ERRORS_CONFIRM_CODE_FAILED: String = "errors.confirm_code_failed"
+        const val ERRORS_SEND_ANSWERS_FAILED: String = "errors.send_answers_failed"
     }
 
     object ErrorCode {
@@ -790,6 +1003,20 @@ object CredflareSpec {
         const val LIVENESS_VIDEO_MISSING: String = "liveness.video_missing"
         const val LIVENESS_VIDEO_TOO_LONG: String = "liveness.video_too_long"
         const val LIVENESS_VIDEO_UNREADABLE: String = "liveness.video_unreadable"
+        const val EMAIL_NOT_CONFIGURED: String = "email.not_configured"
+        const val EMAIL_RESEND_TOO_SOON: String = "email.resend_too_soon"
+        const val EMAIL_SEND_LIMIT: String = "email.send_limit"
+        const val EMAIL_CODE_MISSING: String = "email.code_missing"
+        const val EMAIL_CODE_EXPIRED: String = "email.code_expired"
+        const val EMAIL_CODE_INVALID: String = "email.code_invalid"
+        const val EMAIL_TOO_MANY_ATTEMPTS: String = "email.too_many_attempts"
+        const val PHONE_NOT_CONFIGURED: String = "phone.not_configured"
+        const val PHONE_RESEND_TOO_SOON: String = "phone.resend_too_soon"
+        const val PHONE_SEND_LIMIT: String = "phone.send_limit"
+        const val PHONE_CODE_MISSING: String = "phone.code_missing"
+        const val PHONE_CODE_EXPIRED: String = "phone.code_expired"
+        const val PHONE_CODE_INVALID: String = "phone.code_invalid"
+        const val PHONE_TOO_MANY_ATTEMPTS: String = "phone.too_many_attempts"
         val MEANINGS: Map<String, String> = mapOf(
             "location.accuracy" to "Accuracy is missing or larger than max_accuracy_m",
             "location.stale" to "fix_time is missing, older than max_age_s plus clock_skew_s, or in the future",
@@ -805,6 +1032,333 @@ object CredflareSpec {
             "liveness.video_missing" to "record_video is on and no video for this challenge was sent",
             "liveness.video_too_long" to "The video is longer than max_video_seconds plus one second",
             "liveness.video_unreadable" to "The server cannot read the video duration",
+            "email.not_configured" to "No email sender serves this environment, for example the log driver on a live case",
+            "email.resend_too_soon" to "A code was sent to this email address less than 60 seconds ago",
+            "email.send_limit" to "Five codes were sent for this case within 24 hours",
+            "email.code_missing" to "No unused code was requested for this case",
+            "email.code_expired" to "The code is older than 10 minutes",
+            "email.code_invalid" to "The code does not match",
+            "email.too_many_attempts" to "Five wrong codes were entered; a new code is needed",
+            "phone.not_configured" to "No SMS sender serves this environment, for example the log driver on a live case",
+            "phone.resend_too_soon" to "A code was sent to this phone number less than 60 seconds ago",
+            "phone.send_limit" to "Five codes were sent for this case within 24 hours",
+            "phone.code_missing" to "No unused code was requested for this case",
+            "phone.code_expired" to "The code is older than 10 minutes",
+            "phone.code_invalid" to "The code does not match",
+            "phone.too_many_attempts" to "Five wrong codes were entered; a new code is needed",
+        )
+    }
+
+    object Rejection {
+        const val REQUESTED_BY: String = "rejection.requested_by"
+        const val HELP: String = "rejection.help"
+        const val HELP_EMAIL: String = "rejection.help_email"
+        const val HELP_URL: String = "rejection.help_url"
+        val ACTIONS: List<String> = listOf(
+            "retry",
+            "restart",
+            "reenter_code",
+            "new_code",
+            "wait",
+            "leave",
+        )
+        val ACTION_LABELS: Map<String, String> = mapOf(
+            "retry" to "rejection.action.retry",
+            "restart" to "rejection.action.restart",
+            "reenter_code" to "rejection.action.reenter_code",
+            "new_code" to "rejection.action.new_code",
+            "wait" to "rejection.action.wait",
+            "leave" to "rejection.action.leave",
+        )
+        val CODES: Map<String, SpecRejectionCopy> = mapOf(
+            "location.accuracy" to SpecRejectionCopy(
+                title = "rejection.location_accuracy.title",
+                message = "location.low_accuracy",
+                action = "retry",
+                placeMessageWithin = "location.place.not_precise",
+                placeMessageOutside = "location.place.not_precise",
+            ),
+            "location.stale" to SpecRejectionCopy(
+                title = "rejection.location_stale.title",
+                message = "location.stale",
+                action = "retry",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "location.mock" to SpecRejectionCopy(
+                title = "rejection.location_mock.title",
+                message = "location.mock_detected",
+                action = "retry",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "location.ip_country" to SpecRejectionCopy(
+                title = "rejection.location_ip_country.title",
+                message = "location.ip_country_mismatch",
+                action = "retry",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "location.reference_not_matched" to SpecRejectionCopy(
+                title = "rejection.location_reference.title",
+                message = "location.place.rejected",
+                action = "retry",
+                placeMessageWithin = "location.place.not_matched_within",
+                placeMessageOutside = "location.place.not_matched_outside",
+            ),
+            "liveness.challenge_invalid" to SpecRejectionCopy(
+                title = "rejection.liveness_restart.title",
+                message = "rejection.liveness_restart.message",
+                action = "restart",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "liveness.challenge_expired" to SpecRejectionCopy(
+                title = "rejection.liveness_expired.title",
+                message = "liveness.expired",
+                action = "restart",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "liveness.challenge_used" to SpecRejectionCopy(
+                title = "rejection.liveness_restart.title",
+                message = "rejection.liveness_restart.message",
+                action = "restart",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "liveness.gesture_mismatch" to SpecRejectionCopy(
+                title = "rejection.gesture_mismatch.title",
+                message = "rejection.gesture_mismatch.message",
+                action = "restart",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "liveness.frame_out_of_window" to SpecRejectionCopy(
+                title = "rejection.liveness_expired.title",
+                message = "liveness.expired",
+                action = "restart",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "liveness.not_camera" to SpecRejectionCopy(
+                title = "rejection.not_camera.title",
+                message = "rejection.not_camera.message",
+                action = "restart",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "liveness.video_missing" to SpecRejectionCopy(
+                title = "rejection.video_missing.title",
+                message = "rejection.video_missing.message",
+                action = "restart",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "liveness.video_too_long" to SpecRejectionCopy(
+                title = "rejection.video_too_long.title",
+                message = "rejection.video_too_long.message",
+                action = "restart",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "liveness.video_unreadable" to SpecRejectionCopy(
+                title = "rejection.video_unreadable.title",
+                message = "rejection.video_unreadable.message",
+                action = "restart",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "email.not_configured" to SpecRejectionCopy(
+                title = "rejection.email_not_configured.title",
+                message = "rejection.email_not_configured.message",
+                action = "leave",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "email.resend_too_soon" to SpecRejectionCopy(
+                title = "rejection.code_resend_too_soon.title",
+                message = "rejection.code_resend_too_soon.message",
+                action = "wait",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "email.send_limit" to SpecRejectionCopy(
+                title = "rejection.code_send_limit.title",
+                message = "rejection.code_send_limit.message",
+                action = "leave",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "email.code_missing" to SpecRejectionCopy(
+                title = "rejection.code_missing.title",
+                message = "rejection.code_missing.message",
+                action = "new_code",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "email.code_expired" to SpecRejectionCopy(
+                title = "rejection.code_expired.title",
+                message = "rejection.code_expired.message",
+                action = "new_code",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "email.code_invalid" to SpecRejectionCopy(
+                title = "rejection.code_invalid.title",
+                message = "rejection.code_invalid.message",
+                action = "reenter_code",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "email.too_many_attempts" to SpecRejectionCopy(
+                title = "rejection.code_too_many_attempts.title",
+                message = "rejection.code_too_many_attempts.message",
+                action = "new_code",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "phone.not_configured" to SpecRejectionCopy(
+                title = "rejection.phone_not_configured.title",
+                message = "rejection.phone_not_configured.message",
+                action = "leave",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "phone.resend_too_soon" to SpecRejectionCopy(
+                title = "rejection.code_resend_too_soon.title",
+                message = "rejection.code_resend_too_soon.message",
+                action = "wait",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "phone.send_limit" to SpecRejectionCopy(
+                title = "rejection.code_send_limit.title",
+                message = "rejection.code_send_limit.message",
+                action = "leave",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "phone.code_missing" to SpecRejectionCopy(
+                title = "rejection.code_missing.title",
+                message = "rejection.code_missing.message",
+                action = "new_code",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "phone.code_expired" to SpecRejectionCopy(
+                title = "rejection.code_expired.title",
+                message = "rejection.code_expired.message",
+                action = "new_code",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "phone.code_invalid" to SpecRejectionCopy(
+                title = "rejection.code_invalid.title",
+                message = "rejection.code_invalid.message",
+                action = "reenter_code",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+            "phone.too_many_attempts" to SpecRejectionCopy(
+                title = "rejection.code_too_many_attempts.title",
+                message = "rejection.code_too_many_attempts.message",
+                action = "new_code",
+                placeMessageWithin = null,
+                placeMessageOutside = null,
+            ),
+        )
+    }
+
+    object Requirements {
+        const val VERSION: Int = 1
+        val VERIFICATION_TYPES: List<String> = listOf(
+            "facial_verification",
+            "location_verification",
+            "email_verification",
+            "phone_verification",
+        )
+        const val CONTACT_CODES_CHANNELS_EMAIL: String = "email_verification"
+        const val CONTACT_CODES_CHANNELS_PHONE: String = "phone_verification"
+        const val CONTACT_CODES_CODE_LENGTH: Int = 6
+        const val CONTACT_CODES_TTL_MINUTES: Int = 10
+        const val CONTACT_CODES_MAX_ATTEMPTS: Int = 5
+        const val CONTACT_CODES_RESEND_SECONDS: Int = 60
+        const val CONTACT_CODES_MAX_SENDS: Int = 5
+        const val CONTACT_CODES_SEND_WINDOW_HOURS: Int = 24
+        const val CONTACT_CODES_EMAIL_MAX_LENGTH: Int = 254
+        const val CONTACT_CODES_PHONE_MAX_LENGTH: Int = 32
+        const val CONTACT_CODES_PHONE_STRIP: String = "[\\s().-]"
+        const val CONTACT_CODES_PHONE_PATTERN: String = "^\\+[1-9][0-9]{6,14}\$"
+        val QUESTIONS_TYPES: List<String> = listOf(
+            "text",
+            "textarea",
+            "email",
+            "number",
+            "date",
+            "select",
+            "tel",
+            "founders",
+            "phone",
+            "single_select",
+            "multi_select",
+            "country",
+            "consent",
+        )
+        val QUESTIONS_CHOICE_TYPES: List<String> = listOf(
+            "select",
+            "single_select",
+            "multi_select",
+        )
+        const val QUESTIONS_KEY_PATTERN: String = "^[A-Za-z][A-Za-z0-9_-]{0,99}\$"
+        const val QUESTIONS_MAX_OPTIONS: Int = 100
+        const val QUESTIONS_MAX_OPTION_LENGTH: Int = 200
+        const val QUESTIONS_TEXT_MAX_LENGTH: Int = 5000
+        const val QUESTIONS_NUMBER_PATTERN: String = "^-?[0-9]+(\\.[0-9]+)?\$"
+        const val QUESTIONS_DATE_PATTERN: String = "^\\d{4}-\\d{2}-\\d{2}\$"
+        const val QUESTIONS_PHONE_PATTERN: String = "^\\+?[0-9][0-9 ().-]{4,30}\$"
+        const val QUESTIONS_COUNTRY_PATTERN: String = "^[A-Z]{2}\$"
+        const val QUESTIONS_EMAIL_MAX_LENGTH: Int = 254
+        val SHOW_IF_MATCH: List<String> = listOf(
+            "all",
+            "any",
+        )
+        const val SHOW_IF_DEFAULT_MATCH: String = "all"
+        const val SHOW_IF_MAX_CONDITIONS: Int = 10
+        const val SHOW_IF_PATH_PREFIX: String = "form."
+        const val SHOW_IF_EARLIER_ANSWERS: String = "profile.form_answers"
+        val SHOW_IF_OPERATORS: List<String> = listOf(
+            "equals",
+            "not_equals",
+            "gt",
+            "gte",
+            "lt",
+            "lte",
+            "contains",
+            "not_contains",
+            "in",
+            "not_in",
+            "is_empty",
+            "is_not_empty",
+            "regex",
+            "fuzzy_match",
+        )
+        const val SHOW_IF_MAX_LIST_VALUES: Int = 100
+        const val SHOW_IF_MAX_PATTERN_LENGTH: Int = 200
+        const val SHOW_IF_FUZZY_DEFAULT_MIN_SCORE: Int = 80
+        val REFRESH_AFTER: List<String> = listOf(
+            "submit",
+            "email_code_confirm",
+            "phone_code_confirm",
+        )
+        val REFRESH_OPEN_STATUSES: List<String> = listOf(
+            "pending",
+            "in_progress",
+        )
+        val REFRESH_OUTSTANDING: List<String> = listOf(
+            "profile.document_requirements",
+            "profile.verification_requirements",
+            "profile.form_schema",
         )
     }
 

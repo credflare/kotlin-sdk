@@ -1,0 +1,245 @@
+package net.credflare.sdk
+
+import org.junit.AfterClass
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.BeforeClass
+import org.junit.Test
+
+class ContactCodeTest {
+    companion object {
+        private lateinit var server: ContractServer
+        @JvmStatic @BeforeClass fun start() { server = ContractServer() }
+        @JvmStatic @AfterClass fun stop() { server.close() }
+    }
+
+    @Test
+    fun requestsAndConfirmsCodesThroughTheSessionRoutes() {
+        val client = server.session("codes")
+        val email = client.requestCode("email", "Jane.Doe@example.test")
+        assertEquals(CodeRequest("email", "J*******@example.test", "2026-11-22T00:08:07.000000Z", "2026-11-21T23:59:07.000000Z", 4), email)
+        assertEquals(CredflareSpec.Requirements.CONTACT_CODES_RESEND_SECONDS * 1000L, email.resendDelayMillis)
+        val phone = client.requestCode("phone", "+237650000001")
+        assertEquals("+237*******01", phone.destination)
+        assertEquals(1, client.confirmCode("email", "123456"))
+        val codes = server.stats().getJSONArray("codes")
+        val sent = (0 until codes.length()).map { codes.getJSONObject(it) }.takeLast(3)
+        assertEquals("Jane.Doe@example.test", sent[0].getJSONObject("body").getString("email"))
+        assertEquals("+237650000001", sent[1].getJSONObject("body").getString("phone"))
+        assertEquals("123456", sent[2].getJSONObject("body").getString("code"))
+        assertTrue(sent[2].getBoolean("confirm"))
+    }
+
+    @Test
+    fun normalizesDestinationsWithTheSpecRules() {
+        assertEquals("+237650000001", ContactCodes.normalize("phone", " +237 (650) 000-0.01 "))
+        assertNull(ContactCodes.normalize("phone", "650000001"))
+        assertNull(ContactCodes.normalize("phone", "+0237650000001"))
+        assertEquals("jane@example.test", ContactCodes.normalize("email", " jane@example.test "))
+        assertNull(ContactCodes.normalize("email", "jane"))
+        assertNull(ContactCodes.normalize("email", "a".repeat(250) + "@example.test"))
+    }
+
+    @Test
+    fun resendTimingFollowsTheLastCodeRequest() {
+        val launch = CredflareVerification.Launch({ error("unused") }) {}
+        launch.client = server.session("codes")
+        launch.requestCode("phone", "+237650000001", "Acme", 1_000)
+        assertEquals(60_000L, launch.resendIn("phone", 1_000))
+        assertEquals(15_000L, launch.resendIn("phone", 46_000))
+        assertEquals(0L, launch.resendIn("phone", 61_000))
+        assertEquals("+237650000001", launch.destinations["phone"])
+    }
+
+    @Test
+    fun codeRejectionsBecomeSpecScreensAndKeepTheLastRequest() {
+        val launch = CredflareVerification.Launch({ error("unused") }) {}
+        launch.client = server.session("codes")
+        launch.requestCode("email", "sandra.smith@example.test", "Acme", 0)
+        launch.client = server.session("reject:email.resend_too_soon")
+        val wait = try { launch.requestCode("email", "sandra.smith@example.test", "Acme", 5_000, IsoTime.parse("2026-11-23T15:32:02.000Z")!!.time); null } catch(error: CredflareVerification.Rejected) { error.screen }
+        assertEquals("wait", wait!!.action)
+        assertEquals(CodeRequest("email", "s***********@example.test", "2026-11-23T15:41:57.000000Z", "2026-11-23T15:32:57.000000Z", 4), launch.codeRequest)
+        assertEquals("sandra.smith@example.test", launch.codeTarget("email"))
+        assertEquals(55_000L, launch.resendIn("email", 5_000))
+        launch.client = server.session("reject:email.code_invalid")
+        val reenter = try { launch.confirmCode("email", "000000", "Acme"); null } catch(error: CredflareVerification.Rejected) { error.screen }
+        assertEquals("reenter_code", reenter!!.action)
+        assertEquals("Code not correct", reenter.title)
+    }
+
+    @Test
+    fun aResendTooSoonRejectionCarriesTheNextSendTime() {
+        val error = CredflareException.fromEnvelope(422, ContractServer.fixture("rejections/phone.resend_too_soon.json"))
+        assertEquals(CredflareSpec.ErrorCode.PHONE_RESEND_TOO_SOON, error.code)
+        assertEquals("2026-11-23T15:32:59.000000Z", error.resendAvailableAt)
+        assertEquals("+237*******01", error.destination)
+        assertEquals("2026-11-23T15:41:59.000000Z", error.expiresAt)
+        assertEquals(4, error.sendsRemaining)
+        assertNull(CredflareException.fromEnvelope(422, ContractServer.fixture("rejections/phone.code_invalid.json")).resendAvailableAt)
+        val launch = CredflareVerification.Launch({ error("unused") }) {}
+        launch.client = server.session("resend-with-time")
+        val wall = IsoTime.parse("2026-11-23T15:32:29.000Z")!!.time
+        try { launch.requestCode("phone", "+237650000001", "Acme", 1_000, wall); throw AssertionError("not rejected") } catch(_: CredflareVerification.Rejected) {}
+        assertEquals(30_000L, launch.resendIn("phone", 1_000))
+    }
+
+    @Test
+    fun aResendTooSoonWithoutALocalRequestOpensTheCodeEntry() {
+        val launch = CredflareVerification.Launch({ error("unused") }) {}
+        launch.client = server.session("reject:phone.resend_too_soon")
+        val wall = IsoTime.parse("2026-11-23T15:32:19.000Z")!!.time
+        val screen = try { launch.requestCode("phone", "+237650000001", "Acme", 2_000, wall); null } catch(error: CredflareVerification.Rejected) { error.screen }
+        assertEquals("wait", screen!!.action)
+        assertEquals(CodeRequest("phone", "+237*******01", "2026-11-23T15:41:59.000000Z", "2026-11-23T15:32:59.000000Z", 4), launch.codeRequest)
+        assertFalse(launch.changeAfter)
+        assertEquals("phone", launch.codeChannel)
+        assertEquals("+237650000001", launch.codeDestination)
+        assertEquals(40_000L, launch.resendIn("phone", 2_000))
+        assertFalse(launch.canResend("phone", 41_999))
+        assertTrue(launch.canResend("phone", 42_000))
+    }
+
+    @Test
+    fun aNewDestinationRefusedTooSoonKeepsTheEarlierCodeEntry() {
+        val launch = CredflareVerification.Launch({ error("unused") }) {}
+        launch.client = server.session("codes")
+        launch.requestCode("phone", "+237650000001", "Acme", 0)
+        launch.changeDestination()
+        assertNull(launch.codeChannel)
+        launch.client = server.session("reject:phone.resend_too_soon")
+        val beforeExpiry = IsoTime.parse("2026-11-22T00:00:00.000Z")!!.time
+        launch.requestCode("phone", "+237650000002", "Acme", 1_000, beforeExpiry)
+        assertNull(launch.rejection)
+        assertEquals(Rejections.screen(CredflareException.fromEnvelope(422, ContractServer.fixture("rejections/phone.resend_too_soon.json")), null, "Acme", HelpContact(null, null)).message, launch.error)
+        assertEquals("+237*******01", launch.codeRequest!!.destination)
+        assertEquals("phone", launch.codeChannel)
+        assertEquals("+237650000001", launch.codeDestination)
+        assertTrue(launch.changeAfter)
+        assertTrue(launch.showsChangeAfter("phone", 1_000))
+        assertFalse(launch.showsChangeAfter("phone", 61_000))
+        assertEquals("+237650000002", launch.destinations["phone"])
+
+        launch.changeDestination()
+        launch.requestCode("phone", "+237650000002", "Acme", 2_000, beforeExpiry)
+        assertEquals("+237*******01", launch.codeRequest!!.destination)
+        assertEquals("+237650000001", launch.codeDestination)
+        assertTrue(launch.changeAfter)
+    }
+
+    @Test
+    fun aResendRefusalAfterAReloadNamesTheWaitingDestination() {
+        val launch = CredflareVerification.Launch({ error("unused") }) {}
+        launch.client = server.session("reject:phone.resend_too_soon")
+        val wall = IsoTime.parse("2026-11-23T15:32:19.000Z")!!.time
+        launch.requestCode("phone", "+237650000002", "Acme", 2_000, wall)
+        assertNull(launch.rejection)
+        assertEquals(CodeRequest("phone", "+237*******01", "2026-11-23T15:41:59.000000Z", "2026-11-23T15:32:59.000000Z", 4), launch.codeRequest)
+        assertEquals("phone", launch.codeChannel)
+        assertNull(launch.codeTarget("phone"))
+        assertTrue(launch.showsChangeAfter("phone", 2_000))
+        assertFalse(launch.canResend("phone", 60_000))
+        assertEquals("+237650000002", launch.destinations["phone"])
+        launch.changeDestination()
+        assertEquals("+237650000002", launch.codeTarget("phone"))
+    }
+
+    @Test
+    fun aLostSendResponseKeepsTheCodeOnTheEarlierAddress() {
+        val launch = CredflareVerification.Launch({ error("unused") }) {}
+        launch.client = server.session("reject:email.resend_too_soon")
+        val wall = IsoTime.parse("2026-11-23T15:32:02.000Z")!!.time
+        launch.requestCode("email", "jane@example.test", "Acme", 0, wall)
+        assertEquals("s***********@example.test", launch.codeRequest!!.destination)
+        assertNull(launch.codeTarget("email"))
+        assertTrue(launch.changeAfter)
+        assertEquals(55_000L, launch.resendIn("email", 0))
+    }
+
+    @Test
+    fun noChangeIsOfferedWhileTheLastCodeWaits() {
+        val launch = CredflareVerification.Launch({ error("unused") }) {}
+        val request = ContractServer.fixture("phone-code-request.json").getJSONObject("data")
+        launch.codeRequest = CodeRequest.fromJson(request.put("sends_remaining", 0))
+        launch.codeChannel = "phone"
+        assertFalse(launch.canChangeDestination("phone", IsoTime.parse("2026-11-22T00:00:00.000Z")!!.time))
+        assertTrue(launch.canChangeDestination("phone", IsoTime.parse("2026-11-22T00:10:00.000Z")!!.time))
+    }
+
+    @Test
+    fun aNewDestinationIsSentDuringTheCountdown() {
+        val launch = CredflareVerification.Launch({ error("unused") }) {}
+        launch.client = server.session("codes")
+        launch.requestCode("phone", "+237650000001", "Acme", 0)
+        launch.changeDestination()
+        val before = server.stats().getJSONArray("codes").length()
+        launch.requestCode("phone", "+237650000003", "Acme", 10_000)
+        val codes = server.stats().getJSONArray("codes")
+        assertEquals(before + 1, codes.length())
+        assertEquals("+237650000003", codes.getJSONObject(codes.length() - 1).getJSONObject("body").getString("phone"))
+        assertEquals("+237650000003", launch.codeDestination)
+    }
+
+    @Test
+    fun theSameDestinationDuringTheCountdownReopensItsCodeEntry() {
+        val launch = CredflareVerification.Launch({ error("unused") }) {}
+        launch.client = server.session("codes")
+        launch.requestCode("phone", "+237650000001", "Acme", 0)
+        val request = launch.codeRequest
+        launch.codeDraft = "12"
+        launch.changeDestination()
+        val before = server.stats().getJSONArray("codes").length()
+        launch.requestCode("phone", "+237650000001", "Acme", 10_000, IsoTime.parse("2026-11-22T00:00:00.000Z")!!.time)
+        assertEquals(before, server.stats().getJSONArray("codes").length())
+        assertEquals(request, launch.codeRequest)
+        assertEquals("phone", launch.codeChannel)
+        assertEquals("12", launch.codeDraft)
+        assertFalse(launch.changeAfter)
+    }
+
+    @Test
+    fun resendStaysOffWhenNoSendsRemain() {
+        val launch = CredflareVerification.Launch({ error("unused") }) {}
+        launch.codeRequest = CodeRequest.fromJson(ContractServer.fixture("phone-code-request.json").getJSONObject("data").put("sends_remaining", 0))
+        launch.codeChannel = "phone"; launch.codeDestination = "+237650000001"
+        assertFalse(launch.canResend("phone", Long.MAX_VALUE))
+        launch.codeRequest = CodeRequest.fromJson(ContractServer.fixture("phone-code-request.json").getJSONObject("data"))
+        assertTrue(launch.canResend("phone", Long.MAX_VALUE))
+    }
+
+    @Test
+    fun confirmingOneChannelDoesNotDelayTheNext() {
+        val launch = CredflareVerification.Launch({ error("unused") }) {}
+        launch.client = server.session("codes")
+        launch.requestCode("email", "jane@example.test", "Acme", 0)
+        launch.confirmCode("email", "123456", "Acme")
+        assertEquals(0L, launch.resendIn("phone", 5_000))
+        assertTrue(launch.canResend("phone", 5_000))
+        assertNull(launch.codeChannel)
+    }
+
+    @Test
+    fun closingALeaveScreenReportsItsCode() {
+        val launch = CredflareVerification.Launch({ error("unused") }) {}
+        assertEquals(VerificationOutcome(VerificationResult.CANCELLED), launch.leaveResult)
+        launch.client = server.session("reject:phone.send_limit")
+        launch.rejection = try { launch.requestCode("phone", "+237650000001", "Acme", 0); null } catch(error: CredflareVerification.Rejected) { error.screen }
+        assertEquals(VerificationOutcome(VerificationResult.HOST_ACTION_REQUIRED, "phone.send_limit"), launch.leaveResult)
+        launch.client = server.session("reject:phone.code_invalid")
+        launch.rejection = try { launch.confirmCode("phone", "000000", "Acme"); null } catch(error: CredflareVerification.Rejected) { error.screen }
+        assertEquals(VerificationOutcome(VerificationResult.CANCELLED), launch.leaveResult)
+    }
+
+    @Test
+    fun leavingFromANotConfiguredScreenReportsItsCode() {
+        val outcomes = mutableListOf<VerificationOutcome>()
+        val launch = CredflareVerification.Launch({ error("unused") }) { outcomes += it }
+        launch.client = server.session("reject:phone.not_configured")
+        val screen = try { launch.requestCode("phone", "+237650000001", "Acme", 0); null } catch(error: CredflareVerification.Rejected) { error.screen }
+        assertEquals("leave", screen!!.action)
+        launch.result(VerificationResult.HOST_ACTION_REQUIRED, screen.code)
+        assertEquals(listOf(VerificationOutcome(VerificationResult.HOST_ACTION_REQUIRED, "phone.not_configured")), outcomes)
+    }
+}

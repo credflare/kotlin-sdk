@@ -1,7 +1,11 @@
 package net.credflare.kotlindemo
 
 import android.app.Activity
+import android.os.Build
 import android.os.Bundle
+import android.view.Gravity
+import android.view.View
+import android.view.WindowInsets
 import android.widget.*
 import net.credflare.sdk.*
 import org.json.JSONObject
@@ -12,14 +16,16 @@ class MainActivity: Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val demoUrl=intent.getStringExtra("demo_url")?.takeIf { it.startsWith("http://127.0.0.1:") } ?: "http://127.0.0.1:3107"
-        val page=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(48,80,48,48) }
-        page.addView(TextView(this).apply { text="Native Android SDK demo"; textSize=24f })
-        page.addView(TextView(this).apply { text="Follow the steps requested by your verifier. Review your documents and selfie before sending."; textSize=16f; setPadding(0,24,0,24) })
-        val status=TextView(this)
+        val page=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER_HORIZONTAL; setPadding(48,80,48,48) }
+        if(Build.VERSION.SDK_INT >= 35) page.setOnApplyWindowInsetsListener { view, insets -> val bars=insets.getInsets(WindowInsets.Type.systemBars()); view.setPadding(48+bars.left,80+bars.top,48+bars.right,48+bars.bottom); insets }
+        fun centred(view: TextView)=view.apply { gravity=Gravity.CENTER_HORIZONTAL; textAlignment=View.TEXT_ALIGNMENT_CENTER }
+        page.addView(centred(TextView(this).apply { text="Native Android SDK demo"; textSize=24f }))
+        page.addView(centred(TextView(this).apply { text="Follow the steps requested by your verifier. Review your documents and selfie before sending."; textSize=16f; setPadding(0,24,0,24) }))
+        val status=centred(TextView(this))
         page.addView(Button(this).apply {
             text="Start verification"; isAllCaps=false
             setOnClickListener {
-                CredflareVerification.launch(this@MainActivity,SessionProvider {
+                CredflareVerification.launchWithOutcome(this@MainActivity,SessionProvider {
                     val connection=URL(demoUrl+"/session").openConnection() as HttpURLConnection
                     connection.connectTimeout=30000; connection.readTimeout=30000; connection.instanceFollowRedirects=false
                     connection.requestMethod="POST"; connection.doOutput=true
@@ -30,11 +36,11 @@ class MainActivity: Activity() {
                         require(connection.responseCode == 200) { "The local demo backend could not create a session." }
                         SessionDescriptor.fromJson(JSONObject(connection.inputStream.bufferedReader().use { it.readText() }))
                     } finally { connection.disconnect() }
-                }) { result -> status.text=when(result) { VerificationResult.SUBMITTED -> "Evidence received for review."; VerificationResult.CANCELLED -> "Verification closed."; VerificationResult.HOST_ACTION_REQUIRED -> "Return to your app for the remaining checks."; VerificationResult.FAILED -> "Restart verification from this app." } }
+                }) { outcome -> status.text=when(outcome.result) { VerificationResult.SUBMITTED -> "Evidence received for review."; VerificationResult.CANCELLED -> "Verification closed."; VerificationResult.HOST_ACTION_REQUIRED -> "Return to your app for the remaining checks."; VerificationResult.FAILED -> "Restart verification from this app." } }
             }
         })
         page.addView(status)
-        page.addView(TextView(this).apply { text="Sandbox demo. Use sample documents."; textSize=12f; setPadding(0,32,0,0) })
+        page.addView(centred(TextView(this).apply { text="Sandbox demo. Use sample documents."; textSize=12f; setPadding(0,32,0,0) }))
         setContentView(page)
     }
 }

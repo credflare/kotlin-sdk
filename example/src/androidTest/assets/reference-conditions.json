@@ -1,0 +1,284 @@
+[
+  {
+    "name": "unicode digit gt",
+    "condition": {
+      "path": "form.x",
+      "op": "gt",
+      "value": "0"
+    },
+    "form": {
+      "x": "١"
+    },
+    "expect": false
+  },
+  {
+    "name": "unicode digit equals",
+    "condition": {
+      "path": "form.x",
+      "op": "equals",
+      "value": 1
+    },
+    "form": {
+      "x": "١"
+    },
+    "expect": false
+  },
+  {
+    "name": "regex unicode digit",
+    "condition": {
+      "path": "form.x",
+      "op": "regex",
+      "value": "^\\d$"
+    },
+    "form": {
+      "x": "١"
+    },
+    "expect": false
+  },
+  {
+    "name": "regex ascii digit",
+    "condition": {
+      "path": "form.x",
+      "op": "regex",
+      "value": "^\\d$"
+    },
+    "form": {
+      "x": "7"
+    },
+    "expect": true
+  },
+  {
+    "name": "regex nbsp space",
+    "condition": {
+      "path": "form.x",
+      "op": "regex",
+      "value": "^a\\sb$"
+    },
+    "form": {
+      "x": "a b"
+    },
+    "expect": true
+  },
+  {
+    "name": "regex word unicode",
+    "condition": {
+      "path": "form.x",
+      "op": "regex",
+      "value": "^\\w+$"
+    },
+    "form": {
+      "x": "é"
+    },
+    "expect": false
+  },
+  {
+    "name": "regex escaped backslash d",
+    "condition": {
+      "path": "form.x",
+      "op": "regex",
+      "value": "\\\\d"
+    },
+    "form": {
+      "x": "\\d"
+    },
+    "expect": true
+  },
+  {
+    "name": "overflow gte",
+    "condition": {
+      "path": "form.x",
+      "op": "gte",
+      "value": "1e401"
+    },
+    "form": {
+      "x": "1e400"
+    },
+    "expect": false
+  },
+  {
+    "name": "overflow lt",
+    "condition": {
+      "path": "form.x",
+      "op": "lt",
+      "value": "1e401"
+    },
+    "form": {
+      "x": "1e400"
+    },
+    "expect": false
+  },
+  {
+    "name": "overflow equals",
+    "condition": {
+      "path": "form.x",
+      "op": "equals",
+      "value": "1e401"
+    },
+    "form": {
+      "x": "1e400"
+    },
+    "expect": true
+  },
+  {
+    "name": "hour 24 gt",
+    "condition": {
+      "path": "form.x",
+      "op": "gt",
+      "value": "2024-01-01T23:59Z"
+    },
+    "form": {
+      "x": "2024-01-01T24:00Z"
+    },
+    "expect": true
+  },
+  {
+    "name": "hour 24 equals next day",
+    "condition": {
+      "path": "form.x",
+      "op": "gte",
+      "value": "2024-01-02"
+    },
+    "form": {
+      "x": "2024-01-01T24:00Z"
+    },
+    "expect": true
+  },
+  {
+    "name": "hour 24 lt next day",
+    "condition": {
+      "path": "form.x",
+      "op": "lt",
+      "value": "2024-01-02"
+    },
+    "form": {
+      "x": "2024-01-01T24:00Z"
+    },
+    "expect": false
+  },
+  {
+    "name": "fuzzy cut at 200",
+    "condition": {
+      "path": "form.x",
+      "op": "fuzzy_match",
+      "value": {
+        "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaazzzzzzzzzz",
+        "min_score": 100
+      }
+    },
+    "form": {
+      "x": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaayyyyyyyyyy"
+    },
+    "expect": true
+  },
+  {
+    "name": "fuzzy unicode spaces",
+    "condition": {
+      "path": "form.x",
+      "op": "fuzzy_match",
+      "value": {
+        "text": "jane doe",
+        "min_score": 100
+      }
+    },
+    "form": {
+      "x": "﻿ Jane　 Doe "
+    },
+    "expect": true
+  },
+  {
+    "name": "regex unicode code point escape",
+    "condition": {
+      "path": "form.x",
+      "op": "regex",
+      "value": "^\\u{41}$"
+    },
+    "form": {
+      "x": "A"
+    },
+    "expect": true
+  },
+  {
+    "name": "regex astral code point escape",
+    "condition": {
+      "path": "form.x",
+      "op": "regex",
+      "value": "^\\u{1F600}$"
+    },
+    "form": {
+      "x": "😀"
+    },
+    "expect": true
+  },
+  {
+    "name": "regex code point escape in class",
+    "condition": {
+      "path": "form.x",
+      "op": "regex",
+      "value": "^[\\u{41}-\\u{43}]+$"
+    },
+    "form": {
+      "x": "ABC"
+    },
+    "expect": true
+  },
+  {
+    "name": "regex code point escape out of range",
+    "condition": {
+      "path": "form.x",
+      "op": "regex",
+      "value": "^\\u{110000}$"
+    },
+    "form": {
+      "x": "A"
+    },
+    "expect": false
+  },
+  {
+    "name": "regex four digit escape",
+    "condition": {
+      "path": "form.x",
+      "op": "regex",
+      "value": "^\\u0041$"
+    },
+    "form": {
+      "x": "A"
+    },
+    "expect": true
+  },
+  {
+    "name": "contains small number",
+    "condition": {
+      "path": "form.x",
+      "op": "contains",
+      "value": "0.000"
+    },
+    "form": {
+      "x": 0.0001
+    },
+    "expect": true
+  },
+  {
+    "name": "contains large number",
+    "condition": {
+      "path": "form.x",
+      "op": "contains",
+      "value": "1e+21"
+    },
+    "form": {
+      "x": 1e+21
+    },
+    "expect": true
+  },
+  {
+    "name": "lt invalid offset",
+    "condition": {
+      "path": "form.x",
+      "op": "lt",
+      "value": "2024-01-01"
+    },
+    "form": {
+      "x": "2024-01-01T00:00+99:00"
+    },
+    "expect": false
+  }
+]

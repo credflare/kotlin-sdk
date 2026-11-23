@@ -133,6 +133,7 @@ class SelfieCameraActivity: Activity(), SurfaceHolder.Callback {
         page.addView(recordingLabel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = ui.dp(CredflareSpec.Tokens.SPACING_SM) })
         page.addView(ui.button(SpecCopy.text(CredflareSpec.CopyKey.COMMON_CANCEL), primary = false) { cancel() }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = ui.dp(CredflareSpec.Tokens.SPACING_MD) })
         setContentView(page)
+        ui.systemBars(window)
         if(Build.VERSION.SDK_INT >= 35) page.setOnApplyWindowInsetsListener { view, insets -> val bars = insets.getInsets(android.view.WindowInsets.Type.systemBars()); view.setPadding(view.paddingLeft, bars.top + ui.dp(CredflareSpec.Tokens.SPACING_XL), view.paddingRight, bars.bottom + ui.dp(CredflareSpec.Tokens.SPACING_GUTTER)); insets }
     }
 

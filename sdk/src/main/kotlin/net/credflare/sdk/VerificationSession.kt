@@ -74,6 +74,15 @@ class VerificationSession(private var descriptor: SessionDescriptor, private val
         body.write(bytes); text("\r\n--$boundary--\r\n")
         return request("POST", suffix, body.toByteArray(), "multipart/form-data; boundary=$boundary", key).getJSONObject("data").getInt("id")
     }
+    fun requestCode(channel: String, destination: String): CodeRequest {
+        require(channel in listOf("email", "phone")) { "Unknown contact channel." }
+        return CodeRequest.fromJson(request("POST", "/$channel-codes", JSONObject().put(channel, destination).toString().toByteArray(Charsets.UTF_8), "application/json").getJSONObject("data"))
+    }
+    fun confirmCode(channel: String, code: String): Int {
+        require(channel in listOf("email", "phone")) { "Unknown contact channel." }
+        return request("POST", "/$channel-codes/confirm", JSONObject().put("code", code).toString().toByteArray(Charsets.UTF_8), "application/json").getJSONObject("data").getInt("id")
+    }
+    fun submitAnswers(fields: JSONObject, key: UUID): Int = submitJson(JSONObject().put("type", "form_submission").put("fields", fields), key)
     fun submitFacial(submission: FacialSubmission, key: UUID): Int = submitJson(submission.json(), key)
     fun submitLocation(fix: LocationFix, key: UUID): Int = submitJson(fix.json(), key)
     fun submit(documentTypeId: Int, evidence: List<Evidence>, key: UUID): Int =

@@ -8,22 +8,26 @@ Native Android collection of documents, a liveness challenge with selfie and vid
 import net.credflare.sdk.CredflareVerification
 import net.credflare.sdk.SessionProvider
 
-CredflareVerification.launch(activity, SessionProvider {
+CredflareVerification.launchWithOutcome(activity, SessionProvider {
     authenticatedBackend.createApplicantSession()
-}) { result ->
-    handleCollectionResult(result)
+}) { outcome ->
+    when(outcome.rejectionCode) {
+        CredflareSpec.ErrorCode.PHONE_NOT_CONFIGURED -> offerAnotherWayToConfirmThePhone()
+        CredflareSpec.ErrorCode.PHONE_SEND_LIMIT -> askToTryAgainTomorrow()
+        else -> handleCollectionResult(outcome.result)
+    }
 }
 ```
 
-The launcher returns false when a flow is already open. The provider runs on a worker thread and returns a `SessionDescriptor`. The host backend creates or resumes the correct verification case and returns its temporary descriptor. Closing the flow preserves the case. `SUBMITTED` confirms collection, `HOST_ACTION_REQUIRED` returns control for forms or other checks, and `CANCELLED` closes the native interface. Receipts are separate from verification decisions.
+The launcher returns false when a flow is already open. The provider runs on a worker thread and returns a `SessionDescriptor`. The host backend creates or resumes the correct verification case and returns its temporary descriptor. Closing the flow preserves the case. `SUBMITTED` confirms collection, `HOST_ACTION_REQUIRED` returns control for checks the SDK cannot collect, or when a rejection leaves nothing to do in the app, and `CANCELLED` closes the native interface. The `VerificationOutcome` carries the result and a `rejectionCode` that names the rejection (for example `phone.not_configured`) when the applicant left a screen with nothing left to do in the app, by its button, the Close button or Back, so the host app can offer another way. `launch()` still reports the result alone and is deprecated because it drops that code. Receipts are separate from verification decisions.
 
 The flow supports camera photos, file selection, front/back steps, preview, replacement and explicit submission. Each document follows its backend capture rule: `upload`, `snapshot`, `snapshot_or_upload`, or `snapshot_and_upload`. Required document groups remain distinct from capture-source choices. Server file types and size limits are applied before upload and enforced again by the API.
 
-Camera source is client reported. The liveness challenge shows that the camera recorded a server chosen sequence in time; it does not prove a live person and does not detect deepfakes. Forms and other checks return control to the host app. Unsent evidence survives activity recreation in process memory; after process termination, restart from the host app. Tokens and evidence are not saved in preferences or diagnostic logs.
+Camera source is client reported. The liveness challenge shows that the camera recorded a server chosen sequence in time; it does not prove a live person and does not detect deepfakes. A shown question of a type the SDK does not know, and checks the SDK does not collect, return control to the host app. Unsent evidence survives activity recreation in process memory; after process termination, restart from the host app. Tokens and evidence are not saved in preferences or diagnostic logs.
 
 ## Session client
 
-`VerificationSession.get()`, `upload()`, `createLivenessChallenge()`, `uploadBiometric()`, `submit()`, `submitFacial()`, `submitLocation()`, `replaceSession()` and `cancel()` are blocking methods and must run off the main thread. Each upload and submission accepts a UUID retry key. Keep the same key with unchanged evidence after a network failure. A replacement session must use the same API; the host backend must bind renewal to the same case. A `422` raises `CredflareException` with the server's reason as its message and the rejection code in `code`; compare it with the constants in `CredflareSpec.ErrorCode`. `isKnownCode` is false for codes newer than the generated spec.
+`VerificationSession.get()`, `upload()`, `createLivenessChallenge()`, `uploadBiometric()`, `submit()`, `submitFacial()`, `submitLocation()`, `requestCode()`, `confirmCode()`, `submitAnswers()`, `replaceSession()` and `cancel()` are blocking methods and must run off the main thread. Each upload and submission accepts a UUID retry key. Keep the same key with unchanged evidence after a network failure. A replacement session must use the same API; the host backend must bind renewal to the same case. A `422` raises `CredflareException` with the server's reason as its message and the rejection code in `code`; compare it with the constants in `CredflareSpec.ErrorCode`, and pass it to `Rejections.screen()` for the title, message, action and help line from the spec (the help line uses the requester's help email or website from `SessionInfo.help` when the session has one). A `resend_too_soon` rejection also carries `resendAvailableAt`. `isKnownCode` is false for codes newer than the generated spec.
 
 `SessionInfo.requirements` carries each outstanding verification requirement with its parsed settings: gestures, gesture count and video for facial checks; accuracy, age, mock location and IP country rules for location checks, and the reference rule with place labels (never coordinates).
 
@@ -51,7 +55,11 @@ The contract suite, unit tests, emulator runs and the face signal probe are desc
 
 ## Developer configured facial and location collection
 
-Choose the compliance profile on your server when creating the case. The recipient does not choose a profile or verification mode. The SDK collects outstanding documents first, then runs the outstanding facial and location requirements in profile order, then shows a receipt.
+Choose the compliance profile on your server when creating the case. The recipient does not choose a profile or verification mode. The SDK collects outstanding documents first, then the questionnaire, then the outstanding facial, location, email and phone requirements in profile order. After every submission and code confirmation it fetches the session again: a requirement the workflow added in the meantime is collected next, and the receipt appears only when nothing is outstanding or the case is no longer open, including when the session answers `409` because the last submission closed the case. If that fetch fails, the SDK says so and offers to try again instead of showing the receipt.
+
+The questionnaire shows each question whose `show_if` conditions match the answers given above it. Hidden questions are not validated and their answers are not sent. `Questionnaire` and `Conditions` evaluate the same rules for a host that builds its own form.
+
+The email and phone steps ask for the address or number, send a six digit code, and confirm it. The new code button counts down to the time the server allows, and every rejection shows the screen and action the spec defines for its code.
 
 The facial step asks the server for a liveness challenge, runs its gestures in order on the front camera with the shared gesture engine and ML Kit face detection (bundled model), records a short video without audio when the profile asks for one, and captures a selfie. Frames, video and selfie are uploaded against the challenge, then submitted together. Retrying after a timeout or rejection requests a new challenge.
 

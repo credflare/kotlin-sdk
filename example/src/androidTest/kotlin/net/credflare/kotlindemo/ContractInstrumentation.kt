@@ -25,6 +25,14 @@ class ContractInstrumentation: Instrumentation() {
             check(info.documents[0].captureSteps().map { it.id } == listOf("camera_or_upload:front","camera_or_upload:back"))
             val combined=JSONObject(context.assets.open("capture-snapshot_and_upload.json").bufferedReader().use { it.readText() }).getJSONObject("data")
             check(SessionInfo.fromJson(combined).documents[0].captureSteps().map { it.id } == listOf("camera:front","camera:back","upload:front","upload:back"))
+            fun asset(name: String) = context.assets.open(name).bufferedReader().use { it.readText() }
+            fun form(value: Any?): Map<String, Any?> = (Conditions.plain(value) as? Map<*, *>)?.mapKeys { it.key.toString() } ?: emptyMap()
+            fun replay(cases: org.json.JSONArray) = (0 until cases.length()).map { cases.getJSONObject(it) }.filter { case ->
+                val condition = case.getJSONObject("condition")
+                Conditions.test(Condition(condition.getString("path"), condition.getString("op"), Conditions.plain(condition.opt("value"))), mapOf("form" to form(case.get("form")))) != case.getBoolean("expect")
+            }.map { it.getString("name") }
+            val mismatched = replay(JSONObject(asset("show-if-cases.json")).getJSONArray("conditions")) + replay(org.json.JSONArray(asset("reference-conditions.json")))
+            check(mismatched.isEmpty()) { "Conditions differ from the reference: $mismatched" }
             fun expect(type: String, operation: () -> Unit) {
                 try { operation(); error("Expected $type failure") } catch(error: CredflareException) { check(error.type == type) { "Expected $type, received ${error.type}" } }
             }
@@ -102,19 +110,62 @@ class ContractInstrumentation: Instrumentation() {
                 val client=VerificationSession(descriptor("reject:$code"))
                 try {
                     if(code.startsWith("location.")) client.submitLocation(fix,UUID.randomUUID())
+                    else if(code.startsWith("email.") || code.startsWith("phone.")) client.confirmCode(code.substringBefore('.'),"123456")
                     else client.submitFacial(FacialSubmission(challenge.challengeId,1,listOf(2),3,"mlkit",results,FaceDetectionSummary(true,1,true,true),"2026-11-20T23:04:10Z"),UUID.randomUUID())
                     error("$code was not rejected")
-                } catch(error: CredflareException) { check(error.status == 422 && error.code == code && error.isKnownCode && error.message == message) { "Unexpected rejection for $code: ${error.code}" } }
+                } catch(error: CredflareException) {
+                    check(error.status == 422 && error.code == code && error.isKnownCode && error.message == message) { "Unexpected rejection for $code: ${error.code}" }
+                    val screen=Rejections.screen(error,null,"Acme")
+                    check(screen.action == CredflareSpec.Rejection.CODES.getValue(code).action && screen.title != null && !screen.message.contains("{")) { "Unexpected screen for $code" }
+                }
             }
+            val codes=VerificationSession(descriptor("codes"))
+            val sent=codes.requestCode("phone","+237650000001")
+            check(sent.channel == "phone" && sent.destination == "+237*******01" && sent.sendsRemaining == 4 && sent.resendDelayMillis == 60000L) { "Unexpected code request $sent" }
+            check(codes.confirmCode("email","123456") == 1)
+            val codeStats=JSONObject(URL(base.substringBefore("/api/v1")+"/stats").readText()).getJSONArray("codes")
+            check(codeStats.getJSONObject(codeStats.length()-2).getJSONObject("body").getString("phone") == "+237650000001" && codeStats.getJSONObject(codeStats.length()-1).getJSONObject("body").getString("code") == "123456")
+            val form=VerificationSession(descriptor("questionnaire"))
+            val formInfo=form.get()
+            check(formInfo.asksQuestions && formInfo.questionnaire.questions.size == 10)
+            val answers=mapOf<String,Any?>("country" to "DE","employment" to "Student","employer" to "Shop","birth_date" to "1990-05-17","terms" to true)
+            check(formInfo.questionnaire.errors(answers).isEmpty() && !formInfo.questionnaire.fields(answers).has("employer"))
+            check(form.submitAnswers(formInfo.questionnaire.fields(answers),UUID.randomUUID()) == 2)
+            val added=form.get()
+            check(added.outstanding && !added.asksQuestions && added.nextRequirement?.channel == "phone") { "Added requirement was not picked up" }
+            clearsReaskedOptionalAnswers(descriptor("reasked-optional"))
             session.cancel()
             check(!descriptor().toString().contains("test-session-token"))
             try { SessionDescriptor(UUID.randomUUID(),"test-token","http://example.test","2030-01-01"); error("Unsafe URL accepted") } catch(_: IllegalArgumentException) {}
-            output.putString(REPORT_KEY_STREAMRESULT,"PASS: native HTTP contract, capture rules, authentication, timeout, interrupted body, redirects, requirement settings, liveness challenge, gesture, video and selfie uploads, facial and location submissions, location rejections, every spec rejection code, upload metadata and credential redaction")
+            output.putString(REPORT_KEY_STREAMRESULT,"PASS: native HTTP contract, capture rules, authentication, timeout, interrupted body, redirects, requirement settings, liveness challenge, gesture, video and selfie uploads, facial and location submissions, location rejections, every spec rejection code and its screen, email and phone codes, questionnaire answers and the requirement added after them, clearing a re-asked optional date and choice on screen, upload metadata and credential redaction")
             finish(Activity.RESULT_OK,output)
         } catch(error: Throwable) {
             output.putString(REPORT_KEY_STREAMRESULT,"FAIL: ${error.javaClass.simpleName}: ${error.message}")
             finish(Activity.RESULT_CANCELED,output)
         }
+    }
+    private fun clearsReaskedOptionalAnswers(descriptor: SessionDescriptor) {
+        val monitor=addMonitor(VerificationActivity::class.java.name,null,false)
+        val home=startActivitySync(android.content.Intent(targetContext,MainActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        runOnMainSync { check(CredflareVerification.launchWithOutcome(home,SessionProvider { descriptor }) {}) }
+        val screen=waitForMonitorWithTimeout(monitor,20000) ?: error("Verification screen did not open")
+        fun views(root: android.view.View): List<android.view.View> = listOf(root)+((root as? android.view.ViewGroup)?.let { group -> (0 until group.childCount).flatMap { views(group.getChildAt(it)) } } ?: emptyList())
+        fun buttons(label: String): List<android.widget.Button> { var found=emptyList<android.widget.Button>(); runOnMainSync { found=views(screen.window.decorView).filterIsInstance<android.widget.Button>().filter { it.text.toString() == label && it.isShown } }; return found }
+        fun waitFor(label: String): List<android.widget.Button> { repeat(100) { buttons(label).takeIf { it.isNotEmpty() }?.let { return it }; Thread.sleep(200) }; error("No $label button on screen") }
+        val remove=SpecCopy.text(CredflareSpec.CopyKey.QUESTIONS_FOUNDERS_REMOVE)
+        check(waitFor(remove).size == 2) { "Expected a clear action for the optional choice and date" }
+        repeat(2) { val button=buttons(remove).first(); runOnMainSync { button.performClick() }; waitForIdleSync() }
+        check(buttons(remove).isEmpty()) { "Cleared answers still offer the clear action" }
+        val before=JSONObject(URL(base.substringBefore("/api/v1")+"/stats").readText()).getJSONArray("submits").length()
+        val send=buttons(SpecCopy.text(CredflareSpec.CopyKey.QUESTIONS_SEND)).single()
+        runOnMainSync { send.performClick() }
+        var fields: JSONObject?=null
+        repeat(100) { if(fields == null) { val submits=JSONObject(URL(base.substringBefore("/api/v1")+"/stats").readText()).getJSONArray("submits"); if(submits.length() > before) fields=submits.getJSONObject(submits.length()-1).getJSONObject("fields") else Thread.sleep(200) } }
+        val sent=fields ?: error("Answers were not sent")
+        check(sent.has("employment") && sent.isNull("employment") && sent.has("birth_date") && sent.isNull("birth_date")) { "Cleared answers were not sent as null: $sent" }
+        check(sent.getString("country") == "DE" && sent.getBoolean("terms")) { "Kept answers changed: $sent" }
+        runOnMainSync { screen.finish(); home.finish() }
+        removeMonitor(monitor)
     }
     private fun faceProbe(path: String): String {
         val original=BitmapFactory.decodeFile(path) ?: return "FAIL: cannot read $path"

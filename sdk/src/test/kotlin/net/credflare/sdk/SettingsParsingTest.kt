@@ -51,10 +51,10 @@ class SettingsParsingTest {
     }
 
     @Test
-    fun formsAreLeftToTheHostApp() {
+    fun textFormsAreAskedInTheApp() {
         val info = SessionInfo.fromJson(fixture("session.json"))
         assertTrue(info.requirements.isEmpty())
-        assertTrue(info.hasForms && info.needsHostSteps)
+        assertTrue(info.hasForms && info.asksQuestions && !info.needsHostSteps)
     }
 
     @Test

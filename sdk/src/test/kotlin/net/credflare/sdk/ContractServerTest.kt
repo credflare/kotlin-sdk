@@ -63,48 +63,44 @@ class ContractServerTest {
     }
 
     @Test
-    fun everyRejectionFixtureMapsItsCodeToApplicantCopy() {
+    fun everyRejectionFixtureMapsItsCodeToTheSpecScreen() {
         val directory = File("../example/src/androidTest/assets/rejections")
         val files = directory.listFiles { file -> file.name.endsWith(".json") }!!.sortedBy { it.name }
         assertEquals(CredflareSpec.ErrorCode.MEANINGS.keys.sorted(), files.map { it.name.removeSuffix(".json") })
-        val place = LocationReference("within", "any", listOf("Head office"))
-        val copy = { key: String -> SpecCopy.text(key) }
-        val expected = mapOf(
-            CredflareSpec.ErrorCode.LOCATION_ACCURACY to copy(CredflareSpec.CopyKey.LOCATION_LOW_ACCURACY),
-            CredflareSpec.ErrorCode.LOCATION_STALE to copy(CredflareSpec.CopyKey.LOCATION_STALE),
-            CredflareSpec.ErrorCode.LOCATION_MOCK to copy(CredflareSpec.CopyKey.LOCATION_MOCK_DETECTED),
-            CredflareSpec.ErrorCode.LOCATION_IP_COUNTRY to copy(CredflareSpec.CopyKey.LOCATION_IP_COUNTRY_MISMATCH),
-            CredflareSpec.ErrorCode.LOCATION_REFERENCE_NOT_MATCHED to "You do not seem to be at Head office yet. Move closer, then try again.",
-            CredflareSpec.ErrorCode.LIVENESS_CHALLENGE_EXPIRED to copy(CredflareSpec.CopyKey.LIVENESS_EXPIRED),
-            CredflareSpec.ErrorCode.LIVENESS_CHALLENGE_INVALID to copy(CredflareSpec.CopyKey.LIVENESS_EXPIRED),
-            CredflareSpec.ErrorCode.LIVENESS_CHALLENGE_USED to copy(CredflareSpec.CopyKey.LIVENESS_EXPIRED),
-            CredflareSpec.ErrorCode.LIVENESS_FRAME_OUT_OF_WINDOW to copy(CredflareSpec.CopyKey.LIVENESS_EXPIRED),
-        )
         val challengeId = UUID.randomUUID().toString()
         for(file in files) {
             val code = file.name.removeSuffix(".json")
             val client = session("reject:$code")
             val error = try {
-                if(code.startsWith("location.")) client.submitLocation(fix, UUID.randomUUID())
-                else client.submitFacial(FacialSubmission(challengeId, 1, listOf(2), 3, "mlkit", listOf(GestureResult("smile", true, "2026-11-21T00:40:00.000Z")), FaceDetectionSummary(true, 1, true, true), "2026-11-21T00:40:00.000Z"), UUID.randomUUID())
+                when(code.substringBefore('.')) {
+                    "location" -> client.submitLocation(fix, UUID.randomUUID())
+                    "liveness" -> client.submitFacial(FacialSubmission(challengeId, 1, listOf(2), 3, "mlkit", listOf(GestureResult("smile", true, "2026-11-21T00:40:00.000Z")), FaceDetectionSummary(true, 1, true, true), "2026-11-21T00:40:00.000Z"), UUID.randomUUID())
+                    else -> if(code.endsWith("resend_too_soon") || code.endsWith("send_limit") || code.endsWith("not_configured")) client.requestCode(code.substringBefore('.'), "+237650000001")
+                        else client.confirmCode(code.substringBefore('.'), "123456")
+                }
                 fail("$code was not rejected"); throw IllegalStateException()
             } catch(error: CredflareException) { error }
             assertEquals(code, 422, error.status)
             assertEquals(code, code, error.code)
             assertTrue(code, error.isKnownCode)
-            val serverMessage = JSONObject(file.readText()).getString("message")
-            assertEquals(code, serverMessage, error.message)
-            val shown = if(code.startsWith("location.")) Rejections.locationMessage(error, if(code == CredflareSpec.ErrorCode.LOCATION_REFERENCE_NOT_MATCHED) place else null, "Acme") else Rejections.livenessMessage(error, "Acme")
-            assertEquals(code, expected[code] ?: serverMessage, shown)
+            assertEquals(code, JSONObject(file.readText()).getString("message"), error.message)
+            val entry = CredflareSpec.Rejection.CODES.getValue(code)
+            val screen = Rejections.screen(error, null, "Acme")
+            assertEquals(code, SpecCopy.text(entry.title, "verifier" to "Acme"), screen.title)
+            assertEquals(code, SpecCopy.text(entry.message, "verifier" to "Acme"), screen.message)
+            assertEquals(code, entry.action, screen.action)
+            assertEquals(code, SpecCopy.text(CredflareSpec.Rejection.ACTION_LABELS.getValue(entry.action)), screen.actionLabel)
+            assertEquals("Requested by Acme.", screen.requestedBy)
+            assertEquals("If you need help, contact Acme.", screen.help)
         }
     }
 
     @Test
     fun accuracyWithAPlaceAsksForAPreciseFix() {
         val error = try { session("reject:${CredflareSpec.ErrorCode.LOCATION_ACCURACY}").submitLocation(fix, UUID.randomUUID()); fail(); throw IllegalStateException() } catch(error: CredflareException) { error }
-        assertEquals(SpecCopy.text(CredflareSpec.CopyKey.LOCATION_PLACE_NOT_PRECISE), Rejections.locationMessage(error, LocationReference("within", "any", listOf("Head office")), "Acme"))
+        assertEquals(SpecCopy.text(CredflareSpec.CopyKey.LOCATION_PLACE_NOT_PRECISE), Rejections.screen(error, LocationReference("within", "any", listOf("Head office")), "Acme").message)
         val outside = try { session("reject:${CredflareSpec.ErrorCode.LOCATION_REFERENCE_NOT_MATCHED}").submitLocation(fix, UUID.randomUUID()); fail(); throw IllegalStateException() } catch(error: CredflareException) { error }
-        assertEquals("You seem to be too close to Depot. Move away, then try again.", Rejections.locationMessage(outside, LocationReference("outside", "all", listOf("Depot")), "Acme"))
+        assertEquals("You seem to be too close to Depot. Move away, then try again.", Rejections.screen(outside, LocationReference("outside", "all", listOf("Depot")), "Acme").message)
     }
 
     @Test
@@ -113,7 +109,10 @@ class ContractServerTest {
         val error = CredflareException.fromEnvelope(422, envelope)
         assertEquals("location.not_in_spec", error.code)
         assertFalse(error.isKnownCode)
-        assertEquals(envelope.getString("message"), Rejections.locationMessage(error, null, "Acme"))
-        assertEquals(envelope.getString("message"), Rejections.livenessMessage(error, "Acme"))
+        val screen = Rejections.screen(error, null, "Acme")
+        assertEquals(envelope.getString("message"), screen.message)
+        assertEquals(null, screen.title)
+        assertEquals("retry", screen.action)
+        assertEquals(SpecCopy.text(CredflareSpec.CopyKey.REJECTION_ACTION_RETRY), screen.actionLabel)
     }
 }

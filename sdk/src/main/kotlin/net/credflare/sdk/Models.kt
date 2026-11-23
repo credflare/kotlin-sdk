@@ -65,7 +65,8 @@ data class LocationSettings(val maxAccuracyM: Int, val maxAgeS: Int, val mockLoc
     }
 }
 data class VerificationRequirement(val type: String, val facial: FacialSettings? = null, val location: LocationSettings? = null) {
-    val collectedInApp get() = facial != null || location != null
+    val channel: String? get() = when(type) { CredflareSpec.Requirements.CONTACT_CODES_CHANNELS_EMAIL -> "email"; CredflareSpec.Requirements.CONTACT_CODES_CHANNELS_PHONE -> "phone"; else -> null }
+    val collectedInApp get() = facial != null || location != null || channel != null
     companion object {
         fun fromJson(value: JSONObject): VerificationRequirement {
             val type = value.optString("verification_type")
@@ -78,11 +79,29 @@ data class VerificationRequirement(val type: String, val facial: FacialSettings?
         }
     }
 }
-data class SessionInfo(val environment: String, val requesterName: String?, val maxFileSizeBytes: Long, val allowedFileTypes: List<String>, val documents: List<DocumentRequirement>, val requirements: List<VerificationRequirement> = emptyList(), val hasForms: Boolean = false, val hasProfile: Boolean = true) {
-    val needsHostSteps get() = !hasProfile || hasForms || requirements.any { !it.collectedInApp }
+data class HelpContact(val email: String?, val url: String?)
+data class SessionInfo(val environment: String, val requesterName: String?, val maxFileSizeBytes: Long, val allowedFileTypes: List<String>, val documents: List<DocumentRequirement>, val requirements: List<VerificationRequirement> = emptyList(), val questionnaire: Questionnaire = Questionnaire(emptyList()), val hasProfile: Boolean = true, val status: String = "pending", val help: HelpContact = HelpContact(null, null)) {
+    @Deprecated("Pass the questionnaire from the session instead of a flag.")
+    constructor(environment: String, requesterName: String?, maxFileSizeBytes: Long, allowedFileTypes: List<String>, documents: List<DocumentRequirement>, requirements: List<VerificationRequirement>? = emptyList(), hasForms: Boolean, hasProfile: Boolean = true):
+        this(environment, requesterName, maxFileSizeBytes, allowedFileTypes, documents, requirements.orEmpty(), Questionnaire.flag(hasForms), hasProfile)
+    @Deprecated("Copy with a questionnaire instead of a flag.")
+    @JvmName("copyWithFlag")
+    fun copy(environment: String = this.environment, requesterName: String? = this.requesterName, maxFileSizeBytes: Long = this.maxFileSizeBytes, allowedFileTypes: List<String> = this.allowedFileTypes, documents: List<DocumentRequirement> = this.documents, requirements: List<VerificationRequirement> = this.requirements, hasForms: Boolean, hasProfile: Boolean = this.hasProfile): SessionInfo =
+        copy(environment = environment, requesterName = requesterName, maxFileSizeBytes = maxFileSizeBytes, allowedFileTypes = allowedFileTypes, documents = documents, requirements = requirements, questionnaire = if(hasForms == this.hasForms) questionnaire else Questionnaire.flag(hasForms), hasProfile = hasProfile)
+    @Deprecated("Kept for compiled integrations.", level = DeprecationLevel.HIDDEN)
+    fun copy(environment: String = this.environment, requesterName: String? = this.requesterName, maxFileSizeBytes: Long = this.maxFileSizeBytes, allowedFileTypes: List<String> = this.allowedFileTypes, documents: List<DocumentRequirement> = this.documents, requirements: List<VerificationRequirement>? = this.requirements, hasForms: Boolean = this.hasForms, hasProfile: Boolean = this.hasProfile): SessionInfo =
+        copy(environment = environment, requesterName = requesterName, maxFileSizeBytes = maxFileSizeBytes, allowedFileTypes = allowedFileTypes, documents = documents, requirements = requirements.orEmpty(), questionnaire = if(hasForms == this.hasForms) questionnaire else Questionnaire.flag(hasForms), hasProfile = hasProfile)
+    @Deprecated("Kept for compiled integrations.", level = DeprecationLevel.HIDDEN)
+    @JvmName("component7")
+    fun hasFormsComponent(): Boolean = hasForms
+    val hasForms get() = questionnaire.questions.isNotEmpty()
+    val isOpen get() = status in CredflareSpec.Requirements.REFRESH_OPEN_STATUSES
+    val outstanding get() = isOpen && (documents.isNotEmpty() || requirements.isNotEmpty() || hasForms)
+    val needsHostSteps get() = !hasProfile || (hasForms && !questionnaire.supported) || requirements.any { !it.collectedInApp }
     val requiresFacial get() = requirements.any { it.facial != null }
     val requiresLocation get() = requirements.any { it.location != null }
-    val nextRequirement get() = requirements.firstOrNull { it.collectedInApp }
+    val asksQuestions get() = isOpen && hasForms && questionnaire.supported
+    val nextRequirement get() = if(isOpen) requirements.firstOrNull { it.collectedInApp } else null
     companion object {
         fun fromJson(value: JSONObject): SessionInfo {
             val limits = value.getJSONObject("upload_limits")
@@ -90,12 +109,25 @@ data class SessionInfo(val environment: String, val requesterName: String?, val 
             val profile = value.optJSONObject("profile")
             val docs = profile?.optJSONArray("document_requirements") ?: JSONArray()
             val requirements = profile?.optJSONArray("verification_requirements") ?: JSONArray()
-            val requester = value.optJSONObject("requester")?.let { if(it.isNull("name")) null else it.optString("name").takeIf { name -> name.isNotBlank() } }
+            val requesterJson = value.optJSONObject("requester")
+            val requester = requesterJson?.let { if(it.isNull("name")) null else it.optString("name").takeIf { name -> name.isNotBlank() } }
+            fun contact(name: String) = requesterJson?.let { if(it.isNull(name)) null else it.optString(name).trim().takeIf { v -> v.isNotEmpty() } }
+            val helpUrl = contact("help_url")?.takeIf { it.startsWith("https://", true) || it.startsWith("http://", true) }
             return SessionInfo(value.getString("environment"), requester, limits.getLong("max_file_size_bytes"), (0 until types.length()).map { types.getString(it).lowercase() },
                 (0 until docs.length()).map { DocumentRequirement.fromJson(docs.getJSONObject(it)) },
                 (0 until requirements.length()).map { VerificationRequirement.fromJson(requirements.getJSONObject(it)) },
-                (profile?.optJSONArray("form_schema")?.length() ?: 0) > 0, profile != null)
+                Questionnaire.fromJson(profile?.optJSONArray("form_schema"), profile?.optJSONObject("form_answers")), profile != null, value.optString("status").ifEmpty { "pending" }, HelpContact(contact("help_email"), helpUrl))
         }
+    }
+}
+data class CodeRequest(val channel: String, val destination: String, val expiresAt: String, val resendAvailableAt: String, val sendsRemaining: Int) {
+    val resendDelayMillis: Long get() {
+        val expires = IsoTime.parse(expiresAt)?.time ?: return CredflareSpec.Requirements.CONTACT_CODES_RESEND_SECONDS * 1000L
+        val resend = IsoTime.parse(resendAvailableAt)?.time ?: return CredflareSpec.Requirements.CONTACT_CODES_RESEND_SECONDS * 1000L
+        return (resend - expires + CredflareSpec.Requirements.CONTACT_CODES_TTL_MINUTES * 60000L).coerceIn(0L, CredflareSpec.Requirements.CONTACT_CODES_SEND_WINDOW_HOURS * 3600000L)
+    }
+    companion object {
+        fun fromJson(value: JSONObject) = CodeRequest(value.getString("channel"), value.getString("destination"), value.getString("expires_at"), value.getString("resend_available_at"), value.optInt("sends_remaining", 0))
     }
 }
 data class LivenessChallenge(val challengeId: String, val gestures: List<String>, val expiresAt: String, val recordVideo: Boolean, val maxVideoSeconds: Int) {
@@ -122,21 +154,30 @@ data class LocationFix(val latitude: Double, val longitude: Double, val accuracy
     internal fun json(): JSONObject = JSONObject().put("type", "location_verification").put("latitude", latitude).put("longitude", longitude)
         .put("metadata", JSONObject().put("accuracy", accuracy).put("altitude", altitude ?: JSONObject.NULL).put("fix_time", fixTime).put("is_mock", isMock ?: JSONObject.NULL).put("provider", provider ?: JSONObject.NULL).put("captured_at", capturedAt))
 }
-class CredflareException(val status: Int, message: String, cause: Throwable? = null, val code: String? = null): Exception(message, cause) {
+class CredflareException(val status: Int, message: String, cause: Throwable? = null, val code: String? = null, val resendAvailableAt: String? = null, val destination: String? = null, val expiresAt: String? = null, val sendsRemaining: Int? = null): Exception(message, cause) {
+    @Deprecated("Kept for compiled integrations.", level = DeprecationLevel.HIDDEN)
+    constructor(status: Int, message: String, cause: Throwable? = null, code: String? = null): this(status, message, cause, code, null)
     val type get() = when(status) { 0 -> "network"; 401 -> "session_unavailable"; 409 -> "verification_closed"; 422 -> "validation"; else -> "api" }
     val isKnownCode get() = code != null && code in CredflareSpec.ErrorCode.MEANINGS
     companion object {
         fun fromEnvelope(status: Int, envelope: JSONObject) = CredflareException(status, envelope.optString("message", "Request failed."),
-            code = if(envelope.isNull("code")) null else envelope.optString("code").takeIf { it.isNotBlank() })
+            code = if(envelope.isNull("code")) null else envelope.optString("code").takeIf { it.isNotBlank() },
+            resendAvailableAt = text(envelope, "resend_available_at"), destination = text(envelope, "destination"), expiresAt = text(envelope, "expires_at"),
+            sendsRemaining = if(envelope.isNull("sends_remaining")) null else envelope.optInt("sends_remaining", -1).takeIf { it >= 0 })
+        private fun text(envelope: JSONObject, name: String) = if(envelope.isNull(name)) null else envelope.optString(name).takeIf { it.isNotBlank() }
     }
 }
 data class Evidence(val fileId: Int, val source: CaptureSource, val side: DocumentSide) {
     internal fun json() = JSONObject().put("file_id", fileId).put("source", source.value).put("side", side.value)
 }
 enum class VerificationResult { SUBMITTED, CANCELLED, HOST_ACTION_REQUIRED, FAILED }
+data class VerificationOutcome(val result: VerificationResult, val rejectionCode: String? = null)
 internal object IsoTime {
     private fun formatter() = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.ROOT).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
     fun format(millis: Long): String = formatter().format(java.util.Date(millis))
     fun now(): String = format(System.currentTimeMillis())
-    fun parse(value: String): java.util.Date? = try { formatter().parse(value) } catch(_: java.text.ParseException) { null }
+    fun parse(value: String): java.util.Date? {
+        val match = Regex("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})(?:\\.(\\d+))?Z$").matchEntire(value) ?: return null
+        return try { formatter().parse("${match.groupValues[1]}.${match.groupValues[2].take(3).padEnd(3, '0')}Z") } catch(_: java.text.ParseException) { null }
+    }
 }
